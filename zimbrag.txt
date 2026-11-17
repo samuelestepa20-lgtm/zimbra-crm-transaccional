@@ -1,0 +1,1339 @@
+-- ============================================================
+-- BASE DE DATOS: ZIMBRA_CRM
+-- Objetivo: Gestionar contactos, prospectos, marketing y ventas.
+-- ============================================================
+ 
+CREATE DATABASE IF NOT EXISTS zimbra_crm CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+USE zimbra_crm;
+ 
+-- ============================================================
+-- 1. TABLA: ROLES
+-- Almacena los perfiles de acceso de los usuarios.
+-- Catalogo de roles y perfiles de acceso para los usuarios de Zimbra.
+-- ============================================================
+ 
+CREATE TABLE roles (
+    id_rol SMALLINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(40) NOT NULL,
+    descripcion VARCHAR(255),
+    creado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_roles_nombre (nombre)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+ 
+-- ============================================================
+-- 2. TABLA: USUARIOS
+-- Almacena vendedores, administradores y personal de marketing.
+-- Cuentas de acceso del personal de Zimbra que administra prospectos, clientes y ventas.
+-- ============================================================
+ 
+CREATE TABLE usuarios (
+    id_usuario BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    id_rol SMALLINT UNSIGNED NOT NULL,
+    nombre VARCHAR(80) NOT NULL,
+    apellido VARCHAR(80) NOT NULL,
+    correo VARCHAR(254) NOT NULL,
+    nombre_usuario VARCHAR(50) NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    telefono VARCHAR(30),
+    activo TINYINT(1) NOT NULL DEFAULT 1,
+    ultimo_acceso DATETIME,
+    creado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    actualizado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_rol) REFERENCES roles(id_rol)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+ 
+-- ============================================================
+-- 3. TABLA: EMPRESAS
+-- Almacena las organizaciones a las que pertenecen los contactos.
+-- Empresas u organizaciones asociadas a los contactos comerciales de Zimbra.
+-- ============================================================
+ 
+CREATE TABLE empresas (
+    id_empresa BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    nombre_legal VARCHAR(180) NOT NULL,
+    nombre_comercial VARCHAR(180),
+    nit VARCHAR(30),
+    sitio_web VARCHAR(500),
+    sector VARCHAR(100),
+    direccion VARCHAR(255),
+    ciudad VARCHAR(100),
+    pais CHAR(2) NOT NULL DEFAULT 'CO',
+    creado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    actualizado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+ 
+-- ============================================================
+-- 4. TABLA: CONTACTOS
+-- Almacena la información de las personas que interactúan
+-- con Zimbra, sean prospectos o clientes.
+-- Registro central de personas que interactúan con Zimbra; pueden ser prospectos y posteriormente clientes.
+-- ============================================================
+ 
+CREATE TABLE contactos (
+    id_contacto BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    id_empresa BIGINT UNSIGNED,
+    nombres VARCHAR(100) NOT NULL,
+    apellidos VARCHAR(100) NOT NULL,
+    correo VARCHAR(254),
+    telefono VARCHAR(30),
+    cargo VARCHAR(120),
+    consentimiento_email ENUM('PENDIENTE','OTORGADO','REVOCADO') NOT NULL DEFAULT 'PENDIENTE',
+    fecha_consentimiento_email DATETIME,
+    fecha_revocacion_email DATETIME,
+    preferencia_contacto ENUM('EMAIL','TELEFONO','AMBOS','SIN_DEFINIR') NOT NULL DEFAULT 'SIN_DEFINIR',
+    activo TINYINT(1) NOT NULL DEFAULT 1,
+    creado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    actualizado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_empresa) REFERENCES empresas(id_empresa)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+ 
+-- ============================================================
+-- 5. TABLA: FUENTES_PROSPECTOS
+-- Almacena los canales por los cuales se captan los prospectos.
+-- Catalogo de canales de captación y origen de los prospectos.
+-- ============================================================
+ 
+CREATE TABLE fuentes_prospectos (
+    id_fuente SMALLINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(80) NOT NULL,
+    descripcion VARCHAR(255),
+    activa TINYINT(1) NOT NULL DEFAULT 1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+ 
+-- ============================================================
+-- 6. TABLA: PROSPECTOS
+-- Administra los posibles clientes y su asignación a vendedores.
+-- Gestiona el proceso de captación y calificación de prospectos y su asignación a vendedores.
+-- ============================================================
+ 
+CREATE TABLE prospectos (
+    id_prospecto BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    id_contacto BIGINT UNSIGNED NOT NULL,
+    id_fuente SMALLINT UNSIGNED NOT NULL,
+    id_responsable BIGINT UNSIGNED,
+    id_externo_crm VARCHAR(100),
+    estado ENUM('NUEVO','CALIFICADO','EN_SEGUIMIENTO','CONVERTIDO','DESCARTADO') NOT NULL DEFAULT 'NUEVO',
+    prioridad ENUM('BAJA','MEDIA','ALTA') NOT NULL DEFAULT 'MEDIA',
+    puntuacion SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+    fecha_asignacion DATETIME,
+    fecha_calificacion DATETIME,
+    fecha_conversion DATETIME,
+    motivo_descarte VARCHAR(500),
+    observaciones TEXT,
+    creado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    actualizado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_contacto) REFERENCES contactos(id_contacto),
+    FOREIGN KEY (id_fuente) REFERENCES fuentes_prospectos(id_fuente),
+    FOREIGN KEY (id_responsable) REFERENCES usuarios(id_usuario)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+ 
+-- ============================================================
+-- 7. TABLA: VISITANTES_WEB
+-- Identifica a los visitantes del sitio web, incluso anónimos.
+-- Identifica visitantes del sitio web y permite relacionarlos con contactos cuando son identificados.
+-- ============================================================
+ 
+CREATE TABLE visitantes_web (
+    id_visitante BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    token_visitante CHAR(36) NOT NULL,
+    id_contacto BIGINT UNSIGNED,
+    consentimiento_tracking ENUM('DESCONOCIDO','ACEPTADO','RECHAZADO') NOT NULL DEFAULT 'DESCONOCIDO',
+    primer_registro DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ultimo_registro DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_contacto) REFERENCES contactos(id_contacto)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+ 
+-- ============================================================
+-- 8. TABLA: EVENTOS_WEB
+-- Registra las actividades realizadas por los visitantes.
+-- Registra las visitas, formularios, clics y descargas realizadas en el sitio web de Zimbra.
+-- ============================================================
+ 
+CREATE TABLE eventos_web (
+    id_evento_web BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    id_visitante BIGINT UNSIGNED NOT NULL,
+    tipo_evento ENUM('VISITA_PAGINA','DESCARGA_PRUEBA','FORMULARIO','CLIC','OTRO') NOT NULL,
+    url VARCHAR(2048),
+    titulo_pagina VARCHAR(255),
+    fecha_evento DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    metadatos JSON,
+    FOREIGN KEY (id_visitante) REFERENCES visitantes_web(id_visitante)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+ 
+-- ============================================================
+-- 9. TABLA: PRODUCTOS
+-- Almacena los productos y versiones comerciales de Zimbra.
+-- Catalogo de productos y versiones comerciales ofrecidas por Zimbra.
+-- ============================================================
+ 
+CREATE TABLE productos (
+    id_producto BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(150) NOT NULL,
+    descripcion TEXT,
+    precio_lista DECIMAL(15,2),
+    moneda CHAR(3) NOT NULL DEFAULT 'COP',
+    activo TINYINT(1) NOT NULL DEFAULT 1,
+    creado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    actualizado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT chk_productos_precio CHECK (precio_lista IS NULL OR precio_lista >= 0),
+    UNIQUE KEY uq_productos_nombre (nombre)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+ 
+-- ============================================================
+-- 10. TABLA: PRUEBAS_PRODUCTO
+-- Controla las pruebas gratuitas de los productos.
+-- Controla las pruebas gratuitas por contacto y producto, incluyendo inicio, vencimiento y conversión.
+-- ============================================================
+ 
+CREATE TABLE pruebas_producto (
+    id_prueba BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    id_contacto BIGINT UNSIGNED NOT NULL,
+    id_producto BIGINT UNSIGNED NOT NULL,
+    id_prospecto BIGINT UNSIGNED,
+    fecha_inicio DATETIME NOT NULL,
+    fecha_fin DATETIME NOT NULL,
+    estado ENUM('ACTIVA','VENCIDA','FINALIZADA','CONVERTIDO','CANCELADA') NOT NULL DEFAULT 'ACTIVA',
+    fecha_conversion DATETIME,
+    creado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_contacto) REFERENCES contactos(id_contacto),
+    FOREIGN KEY (id_producto) REFERENCES productos(id_producto),
+    FOREIGN KEY (id_prospecto) REFERENCES prospectos(id_prospecto),
+    CONSTRAINT chk_pruebas_fechas CHECK (fecha_fin > fecha_inicio)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+ 
+-- ============================================================
+-- 11. TABLA: OPORTUNIDADES
+-- Administra los posibles negocios hasta su cierre.
+-- Gestiona las oportunidades comerciales, sus responsables, etapas y resultados de venta.
+-- ============================================================
+ 
+CREATE TABLE oportunidades (
+    id_oportunidad BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    id_prospecto BIGINT UNSIGNED NOT NULL,
+    id_responsable BIGINT UNSIGNED NOT NULL,
+    id_externo_crm VARCHAR(100),
+    nombre VARCHAR(180) NOT NULL,
+    etapa ENUM('DESCUBRIMIENTO','CALIFICACION','PROPUESTA','NEGOCIACION','CIERRE') NOT NULL DEFAULT 'DESCUBRIMIENTO',
+    estado ENUM('ABIERTA','GANADA','PERDIDA') NOT NULL DEFAULT 'ABIERTA',
+    monto_estimado DECIMAL(15,2),
+    moneda CHAR(3) NOT NULL DEFAULT 'COP',
+    fecha_cierre_prevista DATE,
+    fecha_cierre_real DATETIME,
+    motivo_perdida VARCHAR(500),
+    creado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    actualizado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_prospecto) REFERENCES prospectos(id_prospecto),
+    FOREIGN KEY (id_responsable) REFERENCES usuarios(id_usuario)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+ 
+-- ============================================================
+-- 12. TABLA: INTERACCIONES
+-- Registra llamadas, correos, reuniones y seguimientos.
+-- Registra las llamadas, correos, reuniones y actividades de seguimiento entre vendedores y contactos.
+-- ============================================================
+ 
+CREATE TABLE interacciones (
+    id_interaccion BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    id_contacto BIGINT UNSIGNED NOT NULL,
+    id_prospecto BIGINT UNSIGNED,
+    id_oportunidad BIGINT UNSIGNED,
+    id_usuario BIGINT UNSIGNED NOT NULL,
+    tipo ENUM('LLAMADA','CORREO','REUNION','WHATSAPP','OTRO') NOT NULL,
+    direccion ENUM('ENTRANTE','SALIENTE','NO_APLICA') NOT NULL DEFAULT 'SALIENTE',
+    asunto VARCHAR(180),
+    descripcion TEXT,
+    resultado ENUM('CONTACTADO','SIN_RESPUESTA','INTERESADO','NO_INTERESADO','REPROGRAMAR','OTRO'),
+    estado ENUM('PENDIENTE','COMPLETADA','CANCELADA') NOT NULL DEFAULT 'PENDIENTE',
+    fecha_programada DATETIME,
+    fecha_realizada DATETIME,
+    creado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    actualizado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_contacto) REFERENCES contactos(id_contacto),
+    FOREIGN KEY (id_prospecto) REFERENCES prospectos(id_prospecto),
+    FOREIGN KEY (id_oportunidad) REFERENCES oportunidades(id_oportunidad),
+    FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+ 
+ 
+-- ============================================================
+-- 13. TABLA: ALERTAS
+-- Almacena notificaciones para los vendedores y administradores.
+-- Almacena las notificaciones destinadas a vendedores y administradores sobre actividades de prospectos.
+-- ============================================================
+ 
+CREATE TABLE alertas (
+    id_alerta BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    id_usuario BIGINT UNSIGNED NOT NULL,
+    id_prospecto BIGINT UNSIGNED NOT NULL,
+    id_evento_web BIGINT UNSIGNED,
+    id_interaccion BIGINT UNSIGNED,
+    tipo_alerta ENUM('VISITA_RELEVANTE','DESCARGA_PRUEBA','SEGUIMIENTO','PRUEBA_POR_VENCER','OTRA') NOT NULL,
+    titulo VARCHAR(180) NOT NULL,
+    mensaje VARCHAR(1000),
+    creada_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    leida_en DATETIME,
+    FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario),
+    FOREIGN KEY (id_prospecto) REFERENCES prospectos(id_prospecto),
+    FOREIGN KEY (id_evento_web) REFERENCES eventos_web(id_evento_web),
+    FOREIGN KEY (id_interaccion) REFERENCES interacciones(id_interaccion)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+ 
+-- ============================================================
+-- 14. TABLA: CAMPANAS
+-- Administra las campañas de marketing por correo electrónico.
+-- Almacena y administra las campañas de marketing por correo electrónico.
+-- ============================================================
+ 
+CREATE TABLE campanas (
+    id_campana BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    id_creador BIGINT UNSIGNED NOT NULL,
+    nombre VARCHAR(180) NOT NULL,
+    asunto_correo VARCHAR(255) NOT NULL,
+    contenido MEDIUMTEXT NOT NULL,
+    estado ENUM('BORRADOR','PROGRAMADA','ENVIADA','CANCELADA') NOT NULL DEFAULT 'BORRADOR',
+    programada_para DATETIME,
+    enviada_en DATETIME,
+    creado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    actualizado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_creador) REFERENCES usuarios(id_usuario)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+ 
+-- ============================================================
+-- 15. TABLA: ENVIOS_CAMPANA
+-- Registra los correos enviados a cada contacto en una campaña.
+-- Registra los envíos individuales de campañas y sus resultados de entrega, apertura y clics.
+-- ============================================================
+ 
+CREATE TABLE envios_campana (
+    id_envio BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    id_campana BIGINT UNSIGNED NOT NULL,
+    id_contacto BIGINT UNSIGNED NOT NULL,
+    estado ENUM('PENDIENTE','ENVIADO','ENTREGADO','ABIERTO','CLIC','REBOTADO','CANCELADO') NOT NULL DEFAULT 'PENDIENTE',
+    enviado_en DATETIME,
+    abierto_en DATETIME,
+    clic_en DATETIME,
+    detalle_error VARCHAR(500),
+    FOREIGN KEY (id_campana) REFERENCES campanas(id_campana),
+    FOREIGN KEY (id_contacto) REFERENCES contactos(id_contacto),
+    UNIQUE KEY uq_envios_campana_contacto (id_campana, id_contacto)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+ 
+ 
+ 
+-- Indices unicos para evitar duplicados incluso ante solicitudes simultaneas.
+ALTER TABLE usuarios
+  ADD UNIQUE KEY uq_usuarios_correo (correo),
+  ADD UNIQUE KEY uq_usuarios_nombre_usuario (nombre_usuario);
+ 
+ALTER TABLE visitantes_web
+  ADD UNIQUE KEY uq_visitantes_token (token_visitante);
+ 
+-- Bitacora requerida por los triggers y procedimientos almacenados.
+CREATE TABLE bitacora_uso (
+    id_bitacora BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    id_usuario BIGINT UNSIGNED NULL,
+    tipo_evento VARCHAR(60) NOT NULL,
+    detalle TEXT,
+    fecha_evento DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario)
+      ON UPDATE CASCADE ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+ 
+-- Indices de consulta complementarios para las relaciones y filtros del CRM.
+ALTER TABLE empresas ADD UNIQUE KEY uq_empresas_nit (nit);
+ALTER TABLE fuentes_prospectos ADD UNIQUE KEY uq_fuentes_nombre (nombre);
+ALTER TABLE contactos ADD KEY idx_contactos_empresa_activo (id_empresa, activo);
+ALTER TABLE prospectos ADD KEY idx_prospectos_estado_prioridad (estado, prioridad);
+ALTER TABLE prospectos ADD KEY idx_prospectos_responsable_estado (id_responsable, estado);
+ALTER TABLE visitantes_web ADD KEY idx_visitantes_contacto (id_contacto);
+ALTER TABLE eventos_web ADD KEY idx_eventos_visitante_fecha (id_visitante, fecha_evento);
+ALTER TABLE pruebas_producto ADD KEY idx_pruebas_estado_vencimiento (estado, fecha_fin);
+ALTER TABLE oportunidades ADD KEY idx_oportunidades_estado_etapa (estado, etapa);
+ALTER TABLE interacciones ADD KEY idx_interacciones_prospecto_fecha (id_prospecto, fecha_realizada);
+ALTER TABLE alertas ADD KEY idx_alertas_usuario_lectura_fecha (id_usuario, leida_en, creada_en);
+ALTER TABLE envios_campana ADD KEY idx_envios_contacto_estado (id_contacto, estado);
+ALTER TABLE bitacora_uso ADD KEY idx_bitacora_usuario_fecha (id_usuario, fecha_evento);
+ 
+USE zimbra_crm;
+DELIMITER //
+ 
+-- T1. Antes de crear un usuario, valida el rol y los datos minimos.
+DROP TRIGGER IF EXISTS trg_validar_usuario_insercion //
+CREATE TRIGGER trg_validar_usuario_insercion
+BEFORE INSERT ON usuarios FOR EACH ROW
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM roles WHERE id_rol = NEW.id_rol) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El rol no existe';
+  END IF;
+  IF NEW.correo IS NULL OR NEW.correo NOT LIKE '%_@_%.__%' THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Correo con formato invalido';
+  END IF;
+  -- Los indices UNIQUE de la tabla impiden duplicados incluso en altas simultaneas.
+END //
+ 
+-- T2. Mantiene las mismas validaciones cuando se modifica un usuario.
+DROP TRIGGER IF EXISTS trg_validar_usuario_actualizacion //
+CREATE TRIGGER trg_validar_usuario_actualizacion
+BEFORE UPDATE ON usuarios FOR EACH ROW
+BEGIN
+  IF NOT (OLD.id_rol <=> NEW.id_rol)
+     AND NOT EXISTS (SELECT 1 FROM roles WHERE id_rol = NEW.id_rol) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El nuevo rol no existe';
+  END IF;
+  IF NOT (OLD.correo <=> NEW.correo) THEN
+    IF NEW.correo IS NULL OR NEW.correo NOT LIKE '%_@_%.__%' THEN
+      SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Correo con formato invalido';
+    END IF;
+    -- El indice UNIQUE uq_usuarios_correo valida que no pertenezca a otra cuenta.
+  END IF;
+  -- El indice UNIQUE uq_usuarios_nombre_usuario evita nombres repetidos.
+END //
+ 
+-- T3. Registra en bitacora cada usuario nuevo.
+DROP TRIGGER IF EXISTS trg_registrar_creacion_usuario //
+CREATE TRIGGER trg_registrar_creacion_usuario
+AFTER INSERT ON usuarios FOR EACH ROW
+BEGIN
+  INSERT INTO bitacora_uso(id_usuario, tipo_evento, detalle)
+  VALUES (NEW.id_usuario, 'CREACION_USUARIO',
+          CONCAT('Usuario ', NEW.nombre_usuario, ' creado con rol ', NEW.id_rol));
+END //
+ 
+-- T4. Audita acceso, cambio de rol y activacion/desactivacion.
+DROP TRIGGER IF EXISTS trg_auditar_usuario_actualizacion //
+CREATE TRIGGER trg_auditar_usuario_actualizacion
+AFTER UPDATE ON usuarios FOR EACH ROW
+BEGIN
+  IF NOT (OLD.ultimo_acceso <=> NEW.ultimo_acceso) AND NEW.ultimo_acceso IS NOT NULL THEN
+    INSERT INTO bitacora_uso(id_usuario, tipo_evento, detalle)
+    VALUES (NEW.id_usuario, 'ACCESO_SISTEMA', CONCAT('Acceso registrado: ', NEW.ultimo_acceso));
+  END IF;
+  IF NOT (OLD.id_rol <=> NEW.id_rol) THEN
+    INSERT INTO bitacora_uso(id_usuario, tipo_evento, detalle)
+    VALUES (NEW.id_usuario, 'CAMBIO_ROL', CONCAT('De rol ', OLD.id_rol, ' a ', NEW.id_rol));
+  END IF;
+  IF NOT (OLD.activo <=> NEW.activo) THEN
+    INSERT INTO bitacora_uso(id_usuario, tipo_evento, detalle)
+    VALUES (NEW.id_usuario, IF(NEW.activo=1,'USUARIO_ACTIVADO','USUARIO_DESACTIVADO'), 'Cambio de estado');
+  END IF;
+END //
+ 
+-- T5. Solo permite agregar envios si la campana esta programada/enviada y hay consentimiento.
+DROP TRIGGER IF EXISTS trg_validar_envio_campana //
+CREATE TRIGGER trg_validar_envio_campana
+BEFORE INSERT ON envios_campana FOR EACH ROW
+BEGIN
+  DECLARE v_consentimiento VARCHAR(20) DEFAULT NULL;
+  DECLARE v_estado_camp VARCHAR(20) DEFAULT NULL;
+  SELECT consentimiento_email INTO v_consentimiento
+    FROM contactos WHERE id_contacto = NEW.id_contacto;
+  IF v_consentimiento IS NULL OR v_consentimiento <> 'OTORGADO' THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El contacto no otorgo consentimiento para correo';
+  END IF;
+  SELECT estado INTO v_estado_camp FROM campanas WHERE id_campana = NEW.id_campana;
+  IF v_estado_camp IS NULL OR v_estado_camp NOT IN ('PROGRAMADA','ENVIADA') THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'La campana no esta en estado valido para enviar';
+  END IF;
+END //
+ 
+-- T6. Genera una alerta cuando una interaccion requiere seguimiento comercial.
+DROP TRIGGER IF EXISTS trg_generar_alerta_seguimiento //
+CREATE TRIGGER trg_generar_alerta_seguimiento
+AFTER INSERT ON interacciones FOR EACH ROW
+BEGIN
+  IF NEW.id_prospecto IS NOT NULL AND NEW.resultado IN ('INTERESADO','REPROGRAMAR') THEN
+    INSERT INTO alertas(id_usuario, id_prospecto, id_interaccion, tipo_alerta, titulo, mensaje)
+    VALUES (NEW.id_usuario, NEW.id_prospecto, NEW.id_interaccion, 'SEGUIMIENTO',
+            'Seguimiento pendiente',
+            CONCAT('Interaccion con resultado ', NEW.resultado, '. Realizar seguimiento.'));
+  END IF;
+END //
+ 
+-- T7. Deja evidencia de los cambios de estado de los prospectos.
+DROP TRIGGER IF EXISTS trg_registrar_cambio_estado_prospecto //
+CREATE TRIGGER trg_registrar_cambio_estado_prospecto
+AFTER UPDATE ON prospectos FOR EACH ROW
+BEGIN
+  IF NOT (OLD.estado <=> NEW.estado) THEN
+    INSERT INTO bitacora_uso(id_usuario, tipo_evento, detalle)
+    VALUES (NEW.id_responsable, 'CAMBIO_ESTADO_PROSPECTO',
+            CONCAT('Prospecto ', NEW.id_prospecto, ': ', OLD.estado, ' -> ', NEW.estado));
+  END IF;
+END //
+ 
+-- T8. Impide rangos de prueba incoherentes y completa la fecha de conversion.
+DROP TRIGGER IF EXISTS trg_validar_prueba_producto_insert //
+CREATE TRIGGER trg_validar_prueba_producto_insert
+BEFORE INSERT ON pruebas_producto FOR EACH ROW
+BEGIN
+  IF NEW.fecha_fin <= NEW.fecha_inicio THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'La fecha de fin debe ser posterior al inicio';
+  END IF;
+  IF NEW.id_prospecto IS NOT NULL AND NOT EXISTS (
+      SELECT 1 FROM prospectos p
+      WHERE p.id_prospecto = NEW.id_prospecto AND p.id_contacto = NEW.id_contacto) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El prospecto no corresponde al contacto de la prueba';
+  END IF;
+  IF NEW.estado = 'CONVERTIDO' AND NEW.fecha_conversion IS NULL THEN
+    SET NEW.fecha_conversion = NOW();
+  END IF;
+END //
+ 
+DROP TRIGGER IF EXISTS trg_validar_prueba_producto_update //
+CREATE TRIGGER trg_validar_prueba_producto_update
+BEFORE UPDATE ON pruebas_producto FOR EACH ROW
+BEGIN
+  IF NEW.fecha_fin <= NEW.fecha_inicio THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'La fecha de fin debe ser posterior al inicio';
+  END IF;
+  IF NEW.id_prospecto IS NOT NULL AND NOT EXISTS (
+      SELECT 1 FROM prospectos p
+      WHERE p.id_prospecto = NEW.id_prospecto AND p.id_contacto = NEW.id_contacto) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El prospecto no corresponde al contacto de la prueba';
+  END IF;
+  IF NEW.estado = 'CONVERTIDO' AND NEW.fecha_conversion IS NULL THEN
+    SET NEW.fecha_conversion = NOW();
+  END IF;
+END //
+ 
+-- T9. Conserva evidencia temporal del consentimiento o su revocacion.
+DROP TRIGGER IF EXISTS trg_auditar_consentimiento_email_insert //
+CREATE TRIGGER trg_auditar_consentimiento_email_insert
+BEFORE INSERT ON contactos FOR EACH ROW
+BEGIN
+  IF NEW.consentimiento_email = 'OTORGADO' AND NEW.fecha_consentimiento_email IS NULL THEN
+    SET NEW.fecha_consentimiento_email = NOW();
+  END IF;
+  IF NEW.consentimiento_email = 'REVOCADO' AND NEW.fecha_revocacion_email IS NULL THEN
+    SET NEW.fecha_revocacion_email = NOW();
+  END IF;
+END //
+ 
+DROP TRIGGER IF EXISTS trg_auditar_consentimiento_email_update //
+CREATE TRIGGER trg_auditar_consentimiento_email_update
+BEFORE UPDATE ON contactos FOR EACH ROW
+BEGIN
+  IF OLD.consentimiento_email <> 'OTORGADO' AND NEW.consentimiento_email = 'OTORGADO' THEN
+    SET NEW.fecha_consentimiento_email = NOW();
+    SET NEW.fecha_revocacion_email = NULL;
+  END IF;
+  IF OLD.consentimiento_email <> 'REVOCADO' AND NEW.consentimiento_email = 'REVOCADO' THEN
+    SET NEW.fecha_revocacion_email = NOW();
+  END IF;
+END //
+ 
+DELIMITER ;
+ 
+ 
+USE zimbra_crm;
+DELIMITER //
+ 
+-- Crea usuarios; el backend envia password_hash, nunca la contrasena en texto plano.
+DROP PROCEDURE IF EXISTS sp_crear_usuario //
+CREATE PROCEDURE sp_crear_usuario(
+  IN p_rol SMALLINT UNSIGNED, IN p_nom VARCHAR(80), IN p_ape VARCHAR(80),
+  IN p_correo VARCHAR(254), IN p_user VARCHAR(50), IN p_pass VARCHAR(255),
+  OUT p_est VARCHAR(10), OUT p_msg VARCHAR(200))
+BEGIN
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN ROLLBACK; SET p_est='ERROR'; SET p_msg='No fue posible crear el usuario: revise rol y datos duplicados'; END;
+  START TRANSACTION;
+  INSERT INTO usuarios(id_rol,nombre,apellido,correo,nombre_usuario,password_hash)
+  VALUES(p_rol,p_nom,p_ape,p_correo,p_user,p_pass);
+  COMMIT;
+  SET p_est='OK'; SET p_msg='Usuario creado';
+END //
+ 
+-- Guarda el ultimo acceso. Devuelve ERROR si el ID no existe.
+DROP PROCEDURE IF EXISTS sp_registrar_acceso //
+CREATE PROCEDURE sp_registrar_acceso(IN p_id BIGINT UNSIGNED, OUT p_est VARCHAR(10), OUT p_msg VARCHAR(200))
+BEGIN
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN ROLLBACK; SET p_est='ERROR'; SET p_msg='Error al registrar acceso'; END;
+  START TRANSACTION;
+  IF NOT EXISTS (SELECT 1 FROM usuarios WHERE id_usuario=p_id AND activo=1) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Usuario inexistente o inactivo';
+  END IF;
+  UPDATE usuarios SET ultimo_acceso=NOW() WHERE id_usuario=p_id;
+  COMMIT;
+  SET p_est='OK'; SET p_msg='Acceso registrado';
+END //
+ 
+-- Cambia el rol si tanto el usuario como el rol existen.
+DROP PROCEDURE IF EXISTS sp_cambiar_rol //
+CREATE PROCEDURE sp_cambiar_rol(IN p_id BIGINT UNSIGNED, IN p_rol SMALLINT UNSIGNED,
+  OUT p_est VARCHAR(10), OUT p_msg VARCHAR(200))
+BEGIN
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN ROLLBACK; SET p_est='ERROR'; SET p_msg='No fue posible cambiar el rol'; END;
+  START TRANSACTION;
+  IF NOT EXISTS (SELECT 1 FROM usuarios WHERE id_usuario=p_id) OR NOT EXISTS (SELECT 1 FROM roles WHERE id_rol=p_rol) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Usuario o rol inexistente';
+  END IF;
+  UPDATE usuarios SET id_rol=p_rol WHERE id_usuario=p_id;
+  COMMIT;
+  SET p_est='OK'; SET p_msg='Rol cambiado';
+END //
+ 
+-- Desactiva una cuenta sin eliminar su historial.
+DROP PROCEDURE IF EXISTS sp_desactivar_usuario //
+CREATE PROCEDURE sp_desactivar_usuario(IN p_id BIGINT UNSIGNED, OUT p_est VARCHAR(10), OUT p_msg VARCHAR(200))
+BEGIN
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN ROLLBACK; SET p_est='ERROR'; SET p_msg='Error al desactivar usuario'; END;
+  START TRANSACTION;
+  IF NOT EXISTS (SELECT 1 FROM usuarios WHERE id_usuario=p_id) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Usuario inexistente';
+  END IF;
+  UPDATE usuarios SET activo=0 WHERE id_usuario=p_id;
+  COMMIT;
+  SET p_est='OK'; SET p_msg='Usuario desactivado';
+END //
+ 
+-- Registra interaccion; T6 crea una alerta automaticamente si el resultado es INTERESADO/REPROGRAMAR.
+DROP PROCEDURE IF EXISTS sp_registrar_interaccion //
+CREATE PROCEDURE sp_registrar_interaccion(
+  IN p_contacto BIGINT UNSIGNED, IN p_prospecto BIGINT UNSIGNED,
+  IN p_usuario BIGINT UNSIGNED, IN p_tipo VARCHAR(20), IN p_resultado VARCHAR(20),
+  OUT p_est VARCHAR(10), OUT p_msg VARCHAR(200))
+BEGIN
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN ROLLBACK; SET p_est='ERROR'; SET p_msg='No fue posible registrar la interaccion'; END;
+  START TRANSACTION;
+  IF NOT EXISTS (SELECT 1 FROM contactos WHERE id_contacto=p_contacto AND activo=1) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Contacto inexistente o inactivo';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM usuarios WHERE id_usuario=p_usuario AND activo=1) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Usuario inexistente o inactivo';
+  END IF;
+  IF p_prospecto IS NOT NULL AND NOT EXISTS (
+      SELECT 1 FROM prospectos WHERE id_prospecto=p_prospecto AND id_contacto=p_contacto) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='El prospecto no corresponde al contacto';
+  END IF;
+  INSERT INTO interacciones(id_contacto,id_prospecto,id_usuario,tipo,resultado,estado,fecha_realizada)
+  VALUES(p_contacto,p_prospecto,p_usuario,p_tipo,p_resultado,'COMPLETADA',NOW());
+  COMMIT;
+  SET p_est='OK'; SET p_msg='Interaccion registrada';
+END //
+ 
+-- Cambia estado y registra fecha de calificacion/conversion cuando corresponde.
+DROP PROCEDURE IF EXISTS sp_cambiar_estado_prospecto //
+CREATE PROCEDURE sp_cambiar_estado_prospecto(IN p_id BIGINT UNSIGNED, IN p_estado VARCHAR(20),
+  OUT p_est VARCHAR(10), OUT p_msg VARCHAR(200))
+BEGIN
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN ROLLBACK; SET p_est='ERROR'; SET p_msg='No fue posible cambiar el estado del prospecto'; END;
+  START TRANSACTION;
+  IF NOT EXISTS (SELECT 1 FROM prospectos WHERE id_prospecto=p_id) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Prospecto inexistente';
+  END IF;
+  UPDATE prospectos
+    SET estado=p_estado,
+        fecha_calificacion=IF(p_estado='CALIFICADO',NOW(),fecha_calificacion),
+        fecha_conversion=IF(p_estado='CONVERTIDO',NOW(),fecha_conversion)
+    WHERE id_prospecto=p_id;
+  COMMIT;
+  SET p_est='OK'; SET p_msg='Estado actualizado';
+END //
+ 
+-- Crea una campana en borrador. Debe programarse antes de agregar destinatarios.
+DROP PROCEDURE IF EXISTS sp_crear_campana //
+CREATE PROCEDURE sp_crear_campana(
+  IN p_creador BIGINT UNSIGNED, IN p_nombre VARCHAR(180), IN p_asunto VARCHAR(255),
+  IN p_contenido MEDIUMTEXT, OUT p_id BIGINT UNSIGNED,
+  OUT p_est VARCHAR(10), OUT p_msg VARCHAR(200))
+BEGIN
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN ROLLBACK; SET p_id=NULL; SET p_est='ERROR'; SET p_msg='Error al crear campana'; END;
+  START TRANSACTION;
+  INSERT INTO campanas(id_creador,nombre,asunto_correo,contenido,estado)
+  VALUES(p_creador,p_nombre,p_asunto,p_contenido,'BORRADOR');
+  SET p_id=LAST_INSERT_ID();
+  COMMIT;
+  SET p_est='OK'; SET p_msg='Campana creada en borrador';
+END //
+ 
+-- Crea un destinatario pendiente; T5 verifica consentimiento y estado de campana.
+DROP PROCEDURE IF EXISTS sp_agregar_envio //
+CREATE PROCEDURE sp_agregar_envio(IN p_campana BIGINT UNSIGNED, IN p_contacto BIGINT UNSIGNED,
+  OUT p_est VARCHAR(10), OUT p_msg VARCHAR(200))
+BEGIN
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN ROLLBACK; SET p_est='ERROR'; SET p_msg='Envio rechazado: revise consentimiento y estado de campana'; END;
+  START TRANSACTION;
+  INSERT INTO envios_campana(id_campana,id_contacto,estado)
+  VALUES(p_campana,p_contacto,'PENDIENTE');
+  COMMIT;
+  SET p_est='OK'; SET p_msg='Destinatario agregado';
+END //
+ 
+-- Devuelve el historial de auditoria asociado a un usuario.
+DROP PROCEDURE IF EXISTS sp_historial_usuario //
+CREATE PROCEDURE sp_historial_usuario(IN p_id BIGINT UNSIGNED)
+BEGIN
+  SELECT id_bitacora,tipo_evento,detalle,fecha_evento
+  FROM bitacora_uso WHERE id_usuario=p_id ORDER BY fecha_evento DESC;
+END //
+ 
+-- Devuelve un resumen comercial del prospecto.
+DROP PROCEDURE IF EXISTS sp_resumen_prospecto //
+CREATE PROCEDURE sp_resumen_prospecto(IN p_id BIGINT UNSIGNED)
+BEGIN
+  SELECT p.id_prospecto,c.nombres,c.apellidos,p.estado,p.prioridad,
+    (SELECT COUNT(*) FROM interacciones i WHERE i.id_prospecto=p.id_prospecto) AS interacciones,
+    (SELECT COUNT(*) FROM alertas a WHERE a.id_prospecto=p.id_prospecto AND a.leida_en IS NULL) AS alertas_pendientes
+  FROM prospectos p JOIN contactos c ON c.id_contacto=p.id_contacto
+  WHERE p.id_prospecto=p_id;
+END //
+ 
+-- Demostración ejecutable desde MySQL y Django. El SAVEPOINT es temporal
+-- dentro de la transacción; la bitácora conserva evidencia del rollback.
+DROP PROCEDURE IF EXISTS sp_demo_savepoint_auditable //
+CREATE PROCEDURE sp_demo_savepoint_auditable(
+  IN p_id_usuario BIGINT UNSIGNED,
+  OUT p_estado VARCHAR(10),
+  OUT p_mensaje VARCHAR(200)
+)
+BEGIN
+  DECLARE v_id_temporal BIGINT UNSIGNED DEFAULT NULL;
+  DECLARE EXIT HANDLER FOR SQLEXCEPTION
+  BEGIN
+    ROLLBACK;
+    SET p_estado='ERROR';
+    SET p_mensaje='No fue posible ejecutar la demostración SAVEPOINT';
+  END;
+ 
+  START TRANSACTION;
+  IF NOT EXISTS (SELECT 1 FROM usuarios WHERE id_usuario=p_id_usuario AND activo=1) THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Usuario inexistente o inactivo';
+  END IF;
+ 
+  INSERT INTO bitacora_uso(id_usuario,tipo_evento,detalle)
+  VALUES(p_id_usuario,'SAVEPOINT_INICIO',
+         'Demostración iniciada: se crea un punto de restauración dentro de una transacción.');
+ 
+  SAVEPOINT sp_demo_restauracion;
+ 
+  -- Este registro es deliberadamente temporal y debe desaparecer al revertir.
+  INSERT INTO bitacora_uso(id_usuario,tipo_evento,detalle)
+  VALUES(p_id_usuario,'SAVEPOINT_TEMPORAL',
+         'Registro temporal de prueba: debe eliminarse con ROLLBACK TO SAVEPOINT.');
+  SET v_id_temporal=LAST_INSERT_ID();
+ 
+  ROLLBACK TO SAVEPOINT sp_demo_restauracion;
+  RELEASE SAVEPOINT sp_demo_restauracion;
+ 
+  -- Esta evidencia se escribe después del rollback y sí queda confirmada.
+  INSERT INTO bitacora_uso(id_usuario,tipo_evento,detalle)
+  VALUES(p_id_usuario,'SAVEPOINT_ROLLBACK_OK',
+         CONCAT('Rollback parcial ejecutado correctamente. El registro temporal ',
+                v_id_temporal,' fue revertido; la transacción continuó y se confirmó.'));
+ 
+  COMMIT;
+  SET p_estado='OK';
+  SET p_mensaje='SAVEPOINT ejecutado: la operación temporal se revirtió y la evidencia quedó en bitacora_uso.';
+END //
+ 
+DELIMITER ;
+ 
+ 
+-- ============================================================
+-- ZIMBRA_CRM — INSERCION DE DATOS (minimo 30 registros por tabla)
+-- Se respetan llaves foraneas, ENUM y validaciones de triggers.
+-- Orden de insercion: maestros primero, dependientes despues.
+-- ============================================================
+USE zimbra_crm;
+ 
+-- 1. roles (30)
+INSERT INTO roles(nombre, descripcion) VALUES
+('Rol 1', 'Perfil de acceso numero 1'),
+('Rol 2', 'Perfil de acceso numero 2'),
+('Rol 3', 'Perfil de acceso numero 3'),
+('Rol 4', 'Perfil de acceso numero 4'),
+('Rol 5', 'Perfil de acceso numero 5'),
+('Rol 6', 'Perfil de acceso numero 6'),
+('Rol 7', 'Perfil de acceso numero 7'),
+('Rol 8', 'Perfil de acceso numero 8'),
+('Rol 9', 'Perfil de acceso numero 9'),
+('Rol 10', 'Perfil de acceso numero 10'),
+('Rol 11', 'Perfil de acceso numero 11'),
+('Rol 12', 'Perfil de acceso numero 12'),
+('Rol 13', 'Perfil de acceso numero 13'),
+('Rol 14', 'Perfil de acceso numero 14'),
+('Rol 15', 'Perfil de acceso numero 15'),
+('Rol 16', 'Perfil de acceso numero 16'),
+('Rol 17', 'Perfil de acceso numero 17'),
+('Rol 18', 'Perfil de acceso numero 18'),
+('Rol 19', 'Perfil de acceso numero 19'),
+('Rol 20', 'Perfil de acceso numero 20'),
+('Rol 21', 'Perfil de acceso numero 21'),
+('Rol 22', 'Perfil de acceso numero 22'),
+('Rol 23', 'Perfil de acceso numero 23'),
+('Rol 24', 'Perfil de acceso numero 24'),
+('Rol 25', 'Perfil de acceso numero 25'),
+('Rol 26', 'Perfil de acceso numero 26'),
+('Rol 27', 'Perfil de acceso numero 27'),
+('Rol 28', 'Perfil de acceso numero 28'),
+('Rol 29', 'Perfil de acceso numero 29'),
+('Rol 30', 'Perfil de acceso numero 30');
+ 
+-- 2. usuarios (30) — dispara T1 (validacion) y T3 (bitacora)
+INSERT INTO usuarios(id_rol, nombre, apellido, correo, nombre_usuario, password_hash, telefono) VALUES
+(1, 'Usuario1', 'Apellido1', 'usuario1@zimbra.com', 'user1', 'pbkdf2_sha256$260000$WmltYnJhQ1JNLURlbW8tU2FsdC0yMDI2$zXniXXH_3YNR681NU945BL1WDUPh7bDRpL5lwRPe9gw', '3000000001'),
+(2, 'Usuario2', 'Apellido2', 'usuario2@zimbra.com', 'user2', 'pbkdf2_sha256$260000$WmltYnJhQ1JNLURlbW8tU2FsdC0yMDI2$zXniXXH_3YNR681NU945BL1WDUPh7bDRpL5lwRPe9gw', '3000000002'),
+(3, 'Usuario3', 'Apellido3', 'usuario3@zimbra.com', 'user3', 'pbkdf2_sha256$260000$WmltYnJhQ1JNLURlbW8tU2FsdC0yMDI2$zXniXXH_3YNR681NU945BL1WDUPh7bDRpL5lwRPe9gw', '3000000003'),
+(4, 'Usuario4', 'Apellido4', 'usuario4@zimbra.com', 'user4', 'pbkdf2_sha256$260000$WmltYnJhQ1JNLURlbW8tU2FsdC0yMDI2$zXniXXH_3YNR681NU945BL1WDUPh7bDRpL5lwRPe9gw', '3000000004'),
+(5, 'Usuario5', 'Apellido5', 'usuario5@zimbra.com', 'user5', 'pbkdf2_sha256$260000$WmltYnJhQ1JNLURlbW8tU2FsdC0yMDI2$zXniXXH_3YNR681NU945BL1WDUPh7bDRpL5lwRPe9gw', '3000000005'),
+(6, 'Usuario6', 'Apellido6', 'usuario6@zimbra.com', 'user6', 'pbkdf2_sha256$260000$WmltYnJhQ1JNLURlbW8tU2FsdC0yMDI2$zXniXXH_3YNR681NU945BL1WDUPh7bDRpL5lwRPe9gw', '3000000006'),
+(7, 'Usuario7', 'Apellido7', 'usuario7@zimbra.com', 'user7', 'pbkdf2_sha256$260000$WmltYnJhQ1JNLURlbW8tU2FsdC0yMDI2$zXniXXH_3YNR681NU945BL1WDUPh7bDRpL5lwRPe9gw', '3000000007'),
+(8, 'Usuario8', 'Apellido8', 'usuario8@zimbra.com', 'user8', 'pbkdf2_sha256$260000$WmltYnJhQ1JNLURlbW8tU2FsdC0yMDI2$zXniXXH_3YNR681NU945BL1WDUPh7bDRpL5lwRPe9gw', '3000000008'),
+(9, 'Usuario9', 'Apellido9', 'usuario9@zimbra.com', 'user9', 'pbkdf2_sha256$260000$WmltYnJhQ1JNLURlbW8tU2FsdC0yMDI2$zXniXXH_3YNR681NU945BL1WDUPh7bDRpL5lwRPe9gw', '3000000009'),
+(10, 'Usuario10', 'Apellido10', 'usuario10@zimbra.com', 'user10', 'pbkdf2_sha256$260000$WmltYnJhQ1JNLURlbW8tU2FsdC0yMDI2$zXniXXH_3YNR681NU945BL1WDUPh7bDRpL5lwRPe9gw', '3000000010'),
+(11, 'Usuario11', 'Apellido11', 'usuario11@zimbra.com', 'user11', 'pbkdf2_sha256$260000$WmltYnJhQ1JNLURlbW8tU2FsdC0yMDI2$zXniXXH_3YNR681NU945BL1WDUPh7bDRpL5lwRPe9gw', '3000000011'),
+(12, 'Usuario12', 'Apellido12', 'usuario12@zimbra.com', 'user12', 'pbkdf2_sha256$260000$WmltYnJhQ1JNLURlbW8tU2FsdC0yMDI2$zXniXXH_3YNR681NU945BL1WDUPh7bDRpL5lwRPe9gw', '3000000012'),
+(13, 'Usuario13', 'Apellido13', 'usuario13@zimbra.com', 'user13', 'pbkdf2_sha256$260000$WmltYnJhQ1JNLURlbW8tU2FsdC0yMDI2$zXniXXH_3YNR681NU945BL1WDUPh7bDRpL5lwRPe9gw', '3000000013'),
+(14, 'Usuario14', 'Apellido14', 'usuario14@zimbra.com', 'user14', 'pbkdf2_sha256$260000$WmltYnJhQ1JNLURlbW8tU2FsdC0yMDI2$zXniXXH_3YNR681NU945BL1WDUPh7bDRpL5lwRPe9gw', '3000000014'),
+(15, 'Usuario15', 'Apellido15', 'usuario15@zimbra.com', 'user15', 'pbkdf2_sha256$260000$WmltYnJhQ1JNLURlbW8tU2FsdC0yMDI2$zXniXXH_3YNR681NU945BL1WDUPh7bDRpL5lwRPe9gw', '3000000015'),
+(16, 'Usuario16', 'Apellido16', 'usuario16@zimbra.com', 'user16', 'pbkdf2_sha256$260000$WmltYnJhQ1JNLURlbW8tU2FsdC0yMDI2$zXniXXH_3YNR681NU945BL1WDUPh7bDRpL5lwRPe9gw', '3000000016'),
+(17, 'Usuario17', 'Apellido17', 'usuario17@zimbra.com', 'user17', 'pbkdf2_sha256$260000$WmltYnJhQ1JNLURlbW8tU2FsdC0yMDI2$zXniXXH_3YNR681NU945BL1WDUPh7bDRpL5lwRPe9gw', '3000000017'),
+(18, 'Usuario18', 'Apellido18', 'usuario18@zimbra.com', 'user18', 'pbkdf2_sha256$260000$WmltYnJhQ1JNLURlbW8tU2FsdC0yMDI2$zXniXXH_3YNR681NU945BL1WDUPh7bDRpL5lwRPe9gw', '3000000018'),
+(19, 'Usuario19', 'Apellido19', 'usuario19@zimbra.com', 'user19', 'pbkdf2_sha256$260000$WmltYnJhQ1JNLURlbW8tU2FsdC0yMDI2$zXniXXH_3YNR681NU945BL1WDUPh7bDRpL5lwRPe9gw', '3000000019'),
+(20, 'Usuario20', 'Apellido20', 'usuario20@zimbra.com', 'user20', 'pbkdf2_sha256$260000$WmltYnJhQ1JNLURlbW8tU2FsdC0yMDI2$zXniXXH_3YNR681NU945BL1WDUPh7bDRpL5lwRPe9gw', '3000000020'),
+(21, 'Usuario21', 'Apellido21', 'usuario21@zimbra.com', 'user21', 'pbkdf2_sha256$260000$WmltYnJhQ1JNLURlbW8tU2FsdC0yMDI2$zXniXXH_3YNR681NU945BL1WDUPh7bDRpL5lwRPe9gw', '3000000021'),
+(22, 'Usuario22', 'Apellido22', 'usuario22@zimbra.com', 'user22', 'pbkdf2_sha256$260000$WmltYnJhQ1JNLURlbW8tU2FsdC0yMDI2$zXniXXH_3YNR681NU945BL1WDUPh7bDRpL5lwRPe9gw', '3000000022'),
+(23, 'Usuario23', 'Apellido23', 'usuario23@zimbra.com', 'user23', 'pbkdf2_sha256$260000$WmltYnJhQ1JNLURlbW8tU2FsdC0yMDI2$zXniXXH_3YNR681NU945BL1WDUPh7bDRpL5lwRPe9gw', '3000000023'),
+(24, 'Usuario24', 'Apellido24', 'usuario24@zimbra.com', 'user24', 'pbkdf2_sha256$260000$WmltYnJhQ1JNLURlbW8tU2FsdC0yMDI2$zXniXXH_3YNR681NU945BL1WDUPh7bDRpL5lwRPe9gw', '3000000024'),
+(25, 'Usuario25', 'Apellido25', 'usuario25@zimbra.com', 'user25', 'pbkdf2_sha256$260000$WmltYnJhQ1JNLURlbW8tU2FsdC0yMDI2$zXniXXH_3YNR681NU945BL1WDUPh7bDRpL5lwRPe9gw', '3000000025'),
+(26, 'Usuario26', 'Apellido26', 'usuario26@zimbra.com', 'user26', 'pbkdf2_sha256$260000$WmltYnJhQ1JNLURlbW8tU2FsdC0yMDI2$zXniXXH_3YNR681NU945BL1WDUPh7bDRpL5lwRPe9gw', '3000000026'),
+(27, 'Usuario27', 'Apellido27', 'usuario27@zimbra.com', 'user27', 'pbkdf2_sha256$260000$WmltYnJhQ1JNLURlbW8tU2FsdC0yMDI2$zXniXXH_3YNR681NU945BL1WDUPh7bDRpL5lwRPe9gw', '3000000027'),
+(28, 'Usuario28', 'Apellido28', 'usuario28@zimbra.com', 'user28', 'pbkdf2_sha256$260000$WmltYnJhQ1JNLURlbW8tU2FsdC0yMDI2$zXniXXH_3YNR681NU945BL1WDUPh7bDRpL5lwRPe9gw', '3000000028'),
+(29, 'Usuario29', 'Apellido29', 'usuario29@zimbra.com', 'user29', 'pbkdf2_sha256$260000$WmltYnJhQ1JNLURlbW8tU2FsdC0yMDI2$zXniXXH_3YNR681NU945BL1WDUPh7bDRpL5lwRPe9gw', '3000000029'),
+(30, 'Usuario30', 'Apellido30', 'usuario30@zimbra.com', 'user30', 'pbkdf2_sha256$260000$WmltYnJhQ1JNLURlbW8tU2FsdC0yMDI2$zXniXXH_3YNR681NU945BL1WDUPh7bDRpL5lwRPe9gw', '3000000030');
+ 
+-- 3. empresas (30)
+INSERT INTO empresas(nombre_legal, nombre_comercial, nit, sector, ciudad, pais) VALUES
+('Empresa 1 SAS', 'Comercial 1', '900000001-7', 'Tecnologia', 'Bogota', 'CO'),
+('Empresa 2 SAS', 'Comercial 2', '900000002-7', 'Tecnologia', 'Bogota', 'CO'),
+('Empresa 3 SAS', 'Comercial 3', '900000003-7', 'Tecnologia', 'Bogota', 'CO'),
+('Empresa 4 SAS', 'Comercial 4', '900000004-7', 'Tecnologia', 'Bogota', 'CO'),
+('Empresa 5 SAS', 'Comercial 5', '900000005-7', 'Tecnologia', 'Bogota', 'CO'),
+('Empresa 6 SAS', 'Comercial 6', '900000006-7', 'Tecnologia', 'Bogota', 'CO'),
+('Empresa 7 SAS', 'Comercial 7', '900000007-7', 'Tecnologia', 'Bogota', 'CO'),
+('Empresa 8 SAS', 'Comercial 8', '900000008-7', 'Tecnologia', 'Bogota', 'CO'),
+('Empresa 9 SAS', 'Comercial 9', '900000009-7', 'Tecnologia', 'Bogota', 'CO'),
+('Empresa 10 SAS', 'Comercial 10', '900000010-7', 'Tecnologia', 'Bogota', 'CO'),
+('Empresa 11 SAS', 'Comercial 11', '900000011-7', 'Tecnologia', 'Bogota', 'CO'),
+('Empresa 12 SAS', 'Comercial 12', '900000012-7', 'Tecnologia', 'Bogota', 'CO'),
+('Empresa 13 SAS', 'Comercial 13', '900000013-7', 'Tecnologia', 'Bogota', 'CO'),
+('Empresa 14 SAS', 'Comercial 14', '900000014-7', 'Tecnologia', 'Bogota', 'CO'),
+('Empresa 15 SAS', 'Comercial 15', '900000015-7', 'Tecnologia', 'Bogota', 'CO'),
+('Empresa 16 SAS', 'Comercial 16', '900000016-7', 'Tecnologia', 'Bogota', 'CO'),
+('Empresa 17 SAS', 'Comercial 17', '900000017-7', 'Tecnologia', 'Bogota', 'CO'),
+('Empresa 18 SAS', 'Comercial 18', '900000018-7', 'Tecnologia', 'Bogota', 'CO'),
+('Empresa 19 SAS', 'Comercial 19', '900000019-7', 'Tecnologia', 'Bogota', 'CO'),
+('Empresa 20 SAS', 'Comercial 20', '900000020-7', 'Tecnologia', 'Bogota', 'CO'),
+('Empresa 21 SAS', 'Comercial 21', '900000021-7', 'Tecnologia', 'Bogota', 'CO'),
+('Empresa 22 SAS', 'Comercial 22', '900000022-7', 'Tecnologia', 'Bogota', 'CO'),
+('Empresa 23 SAS', 'Comercial 23', '900000023-7', 'Tecnologia', 'Bogota', 'CO'),
+('Empresa 24 SAS', 'Comercial 24', '900000024-7', 'Tecnologia', 'Bogota', 'CO'),
+('Empresa 25 SAS', 'Comercial 25', '900000025-7', 'Tecnologia', 'Bogota', 'CO'),
+('Empresa 26 SAS', 'Comercial 26', '900000026-7', 'Tecnologia', 'Bogota', 'CO'),
+('Empresa 27 SAS', 'Comercial 27', '900000027-7', 'Tecnologia', 'Bogota', 'CO'),
+('Empresa 28 SAS', 'Comercial 28', '900000028-7', 'Tecnologia', 'Bogota', 'CO'),
+('Empresa 29 SAS', 'Comercial 29', '900000029-7', 'Tecnologia', 'Bogota', 'CO'),
+('Empresa 30 SAS', 'Comercial 30', '900000030-7', 'Tecnologia', 'Bogota', 'CO');
+ 
+-- 4. contactos (30) — consentimiento OTORGADO para que pasen los envios de campana
+INSERT INTO contactos(id_empresa, nombres, apellidos, correo, telefono, cargo, consentimiento_email, fecha_consentimiento_email, preferencia_contacto) VALUES
+(1, 'Contacto', '1', 'contacto1@empresa.com', '601000001', 'Gerente', 'OTORGADO', NOW(), 'EMAIL'),
+(2, 'Contacto', '2', 'contacto2@empresa.com', '601000002', 'Gerente', 'OTORGADO', NOW(), 'EMAIL'),
+(3, 'Contacto', '3', 'contacto3@empresa.com', '601000003', 'Gerente', 'OTORGADO', NOW(), 'EMAIL'),
+(4, 'Contacto', '4', 'contacto4@empresa.com', '601000004', 'Gerente', 'OTORGADO', NOW(), 'EMAIL'),
+(5, 'Contacto', '5', 'contacto5@empresa.com', '601000005', 'Gerente', 'OTORGADO', NOW(), 'EMAIL'),
+(6, 'Contacto', '6', 'contacto6@empresa.com', '601000006', 'Gerente', 'OTORGADO', NOW(), 'EMAIL'),
+(7, 'Contacto', '7', 'contacto7@empresa.com', '601000007', 'Gerente', 'OTORGADO', NOW(), 'EMAIL'),
+(8, 'Contacto', '8', 'contacto8@empresa.com', '601000008', 'Gerente', 'OTORGADO', NOW(), 'EMAIL'),
+(9, 'Contacto', '9', 'contacto9@empresa.com', '601000009', 'Gerente', 'OTORGADO', NOW(), 'EMAIL'),
+(10, 'Contacto', '10', 'contacto10@empresa.com', '601000010', 'Gerente', 'OTORGADO', NOW(), 'EMAIL'),
+(11, 'Contacto', '11', 'contacto11@empresa.com', '601000011', 'Gerente', 'OTORGADO', NOW(), 'EMAIL'),
+(12, 'Contacto', '12', 'contacto12@empresa.com', '601000012', 'Gerente', 'OTORGADO', NOW(), 'EMAIL'),
+(13, 'Contacto', '13', 'contacto13@empresa.com', '601000013', 'Gerente', 'OTORGADO', NOW(), 'EMAIL'),
+(14, 'Contacto', '14', 'contacto14@empresa.com', '601000014', 'Gerente', 'OTORGADO', NOW(), 'EMAIL'),
+(15, 'Contacto', '15', 'contacto15@empresa.com', '601000015', 'Gerente', 'OTORGADO', NOW(), 'EMAIL'),
+(16, 'Contacto', '16', 'contacto16@empresa.com', '601000016', 'Gerente', 'OTORGADO', NOW(), 'EMAIL'),
+(17, 'Contacto', '17', 'contacto17@empresa.com', '601000017', 'Gerente', 'OTORGADO', NOW(), 'EMAIL'),
+(18, 'Contacto', '18', 'contacto18@empresa.com', '601000018', 'Gerente', 'OTORGADO', NOW(), 'EMAIL'),
+(19, 'Contacto', '19', 'contacto19@empresa.com', '601000019', 'Gerente', 'OTORGADO', NOW(), 'EMAIL'),
+(20, 'Contacto', '20', 'contacto20@empresa.com', '601000020', 'Gerente', 'OTORGADO', NOW(), 'EMAIL'),
+(21, 'Contacto', '21', 'contacto21@empresa.com', '601000021', 'Gerente', 'OTORGADO', NOW(), 'EMAIL'),
+(22, 'Contacto', '22', 'contacto22@empresa.com', '601000022', 'Gerente', 'OTORGADO', NOW(), 'EMAIL'),
+(23, 'Contacto', '23', 'contacto23@empresa.com', '601000023', 'Gerente', 'OTORGADO', NOW(), 'EMAIL'),
+(24, 'Contacto', '24', 'contacto24@empresa.com', '601000024', 'Gerente', 'OTORGADO', NOW(), 'EMAIL'),
+(25, 'Contacto', '25', 'contacto25@empresa.com', '601000025', 'Gerente', 'OTORGADO', NOW(), 'EMAIL'),
+(26, 'Contacto', '26', 'contacto26@empresa.com', '601000026', 'Gerente', 'OTORGADO', NOW(), 'EMAIL'),
+(27, 'Contacto', '27', 'contacto27@empresa.com', '601000027', 'Gerente', 'OTORGADO', NOW(), 'EMAIL'),
+(28, 'Contacto', '28', 'contacto28@empresa.com', '601000028', 'Gerente', 'OTORGADO', NOW(), 'EMAIL'),
+(29, 'Contacto', '29', 'contacto29@empresa.com', '601000029', 'Gerente', 'OTORGADO', NOW(), 'EMAIL'),
+(30, 'Contacto', '30', 'contacto30@empresa.com', '601000030', 'Gerente', 'OTORGADO', NOW(), 'EMAIL');
+ 
+-- 5. fuentes_prospectos (30)
+INSERT INTO fuentes_prospectos(nombre, descripcion, activa) VALUES
+('Fuente 1', 'Canal de captacion numero 1', 1),
+('Fuente 2', 'Canal de captacion numero 2', 1),
+('Fuente 3', 'Canal de captacion numero 3', 1),
+('Fuente 4', 'Canal de captacion numero 4', 1),
+('Fuente 5', 'Canal de captacion numero 5', 1),
+('Fuente 6', 'Canal de captacion numero 6', 1),
+('Fuente 7', 'Canal de captacion numero 7', 1),
+('Fuente 8', 'Canal de captacion numero 8', 1),
+('Fuente 9', 'Canal de captacion numero 9', 1),
+('Fuente 10', 'Canal de captacion numero 10', 1),
+('Fuente 11', 'Canal de captacion numero 11', 1),
+('Fuente 12', 'Canal de captacion numero 12', 1),
+('Fuente 13', 'Canal de captacion numero 13', 1),
+('Fuente 14', 'Canal de captacion numero 14', 1),
+('Fuente 15', 'Canal de captacion numero 15', 1),
+('Fuente 16', 'Canal de captacion numero 16', 1),
+('Fuente 17', 'Canal de captacion numero 17', 1),
+('Fuente 18', 'Canal de captacion numero 18', 1),
+('Fuente 19', 'Canal de captacion numero 19', 1),
+('Fuente 20', 'Canal de captacion numero 20', 1),
+('Fuente 21', 'Canal de captacion numero 21', 1),
+('Fuente 22', 'Canal de captacion numero 22', 1),
+('Fuente 23', 'Canal de captacion numero 23', 1),
+('Fuente 24', 'Canal de captacion numero 24', 1),
+('Fuente 25', 'Canal de captacion numero 25', 1),
+('Fuente 26', 'Canal de captacion numero 26', 1),
+('Fuente 27', 'Canal de captacion numero 27', 1),
+('Fuente 28', 'Canal de captacion numero 28', 1),
+('Fuente 29', 'Canal de captacion numero 29', 1),
+('Fuente 30', 'Canal de captacion numero 30', 1);
+ 
+-- 6. prospectos (30)
+INSERT INTO prospectos(id_contacto, id_fuente, id_responsable, estado, prioridad, puntuacion) VALUES
+(1, 1, 1, 'NUEVO', 'BAJA', 0),
+(2, 2, 2, 'CALIFICADO', 'MEDIA', 10),
+(3, 3, 3, 'EN_SEGUIMIENTO', 'ALTA', 20),
+(4, 4, 4, 'CONVERTIDO', 'BAJA', 30),
+(5, 5, 5, 'DESCARTADO', 'MEDIA', 40),
+(6, 6, 6, 'NUEVO', 'ALTA', 50),
+(7, 7, 7, 'CALIFICADO', 'BAJA', 60),
+(8, 8, 8, 'EN_SEGUIMIENTO', 'MEDIA', 70),
+(9, 9, 9, 'CONVERTIDO', 'ALTA', 80),
+(10, 10, 10, 'DESCARTADO', 'BAJA', 90),
+(11, 11, 11, 'NUEVO', 'MEDIA', 100),
+(12, 12, 12, 'CALIFICADO', 'ALTA', 110),
+(13, 13, 13, 'EN_SEGUIMIENTO', 'BAJA', 120),
+(14, 14, 14, 'CONVERTIDO', 'MEDIA', 130),
+(15, 15, 15, 'DESCARTADO', 'ALTA', 140),
+(16, 16, 16, 'NUEVO', 'BAJA', 150),
+(17, 17, 17, 'CALIFICADO', 'MEDIA', 160),
+(18, 18, 18, 'EN_SEGUIMIENTO', 'ALTA', 170),
+(19, 19, 19, 'CONVERTIDO', 'BAJA', 180),
+(20, 20, 20, 'DESCARTADO', 'MEDIA', 190),
+(21, 21, 21, 'NUEVO', 'ALTA', 200),
+(22, 22, 22, 'CALIFICADO', 'BAJA', 210),
+(23, 23, 23, 'EN_SEGUIMIENTO', 'MEDIA', 220),
+(24, 24, 24, 'CONVERTIDO', 'ALTA', 230),
+(25, 25, 25, 'DESCARTADO', 'BAJA', 240),
+(26, 26, 26, 'NUEVO', 'MEDIA', 250),
+(27, 27, 27, 'CALIFICADO', 'ALTA', 260),
+(28, 28, 28, 'EN_SEGUIMIENTO', 'BAJA', 270),
+(29, 29, 29, 'CONVERTIDO', 'MEDIA', 280),
+(30, 30, 30, 'DESCARTADO', 'ALTA', 290);
+ 
+-- 7. visitantes_web (30)
+INSERT INTO visitantes_web(token_visitante, id_contacto, consentimiento_tracking) VALUES
+(UUID(), 1, 'DESCONOCIDO'),
+(UUID(), 2, 'ACEPTADO'),
+(UUID(), 3, 'RECHAZADO'),
+(UUID(), 4, 'DESCONOCIDO'),
+(UUID(), 5, 'ACEPTADO'),
+(UUID(), 6, 'RECHAZADO'),
+(UUID(), 7, 'DESCONOCIDO'),
+(UUID(), 8, 'ACEPTADO'),
+(UUID(), 9, 'RECHAZADO'),
+(UUID(), 10, 'DESCONOCIDO'),
+(UUID(), 11, 'ACEPTADO'),
+(UUID(), 12, 'RECHAZADO'),
+(UUID(), 13, 'DESCONOCIDO'),
+(UUID(), 14, 'ACEPTADO'),
+(UUID(), 15, 'RECHAZADO'),
+(UUID(), 16, 'DESCONOCIDO'),
+(UUID(), 17, 'ACEPTADO'),
+(UUID(), 18, 'RECHAZADO'),
+(UUID(), 19, 'DESCONOCIDO'),
+(UUID(), 20, 'ACEPTADO'),
+(UUID(), NULL, 'RECHAZADO'),
+(UUID(), NULL, 'DESCONOCIDO'),
+(UUID(), NULL, 'ACEPTADO'),
+(UUID(), NULL, 'RECHAZADO'),
+(UUID(), NULL, 'DESCONOCIDO'),
+(UUID(), NULL, 'ACEPTADO'),
+(UUID(), NULL, 'RECHAZADO'),
+(UUID(), NULL, 'DESCONOCIDO'),
+(UUID(), NULL, 'ACEPTADO'),
+(UUID(), NULL, 'RECHAZADO');
+ 
+-- 8. eventos_web (30)
+INSERT INTO eventos_web(id_visitante, tipo_evento, url, titulo_pagina) VALUES
+(1, 'VISITA_PAGINA', 'https://zimbra.com/pagina1', 'Pagina 1'),
+(2, 'DESCARGA_PRUEBA', 'https://zimbra.com/pagina2', 'Pagina 2'),
+(3, 'FORMULARIO', 'https://zimbra.com/pagina3', 'Pagina 3'),
+(4, 'CLIC', 'https://zimbra.com/pagina4', 'Pagina 4'),
+(5, 'OTRO', 'https://zimbra.com/pagina5', 'Pagina 5'),
+(6, 'VISITA_PAGINA', 'https://zimbra.com/pagina6', 'Pagina 6'),
+(7, 'DESCARGA_PRUEBA', 'https://zimbra.com/pagina7', 'Pagina 7'),
+(8, 'FORMULARIO', 'https://zimbra.com/pagina8', 'Pagina 8'),
+(9, 'CLIC', 'https://zimbra.com/pagina9', 'Pagina 9'),
+(10, 'OTRO', 'https://zimbra.com/pagina10', 'Pagina 10'),
+(11, 'VISITA_PAGINA', 'https://zimbra.com/pagina11', 'Pagina 11'),
+(12, 'DESCARGA_PRUEBA', 'https://zimbra.com/pagina12', 'Pagina 12'),
+(13, 'FORMULARIO', 'https://zimbra.com/pagina13', 'Pagina 13'),
+(14, 'CLIC', 'https://zimbra.com/pagina14', 'Pagina 14'),
+(15, 'OTRO', 'https://zimbra.com/pagina15', 'Pagina 15'),
+(16, 'VISITA_PAGINA', 'https://zimbra.com/pagina16', 'Pagina 16'),
+(17, 'DESCARGA_PRUEBA', 'https://zimbra.com/pagina17', 'Pagina 17'),
+(18, 'FORMULARIO', 'https://zimbra.com/pagina18', 'Pagina 18'),
+(19, 'CLIC', 'https://zimbra.com/pagina19', 'Pagina 19'),
+(20, 'OTRO', 'https://zimbra.com/pagina20', 'Pagina 20'),
+(21, 'VISITA_PAGINA', 'https://zimbra.com/pagina21', 'Pagina 21'),
+(22, 'DESCARGA_PRUEBA', 'https://zimbra.com/pagina22', 'Pagina 22'),
+(23, 'FORMULARIO', 'https://zimbra.com/pagina23', 'Pagina 23'),
+(24, 'CLIC', 'https://zimbra.com/pagina24', 'Pagina 24'),
+(25, 'OTRO', 'https://zimbra.com/pagina25', 'Pagina 25'),
+(26, 'VISITA_PAGINA', 'https://zimbra.com/pagina26', 'Pagina 26'),
+(27, 'DESCARGA_PRUEBA', 'https://zimbra.com/pagina27', 'Pagina 27'),
+(28, 'FORMULARIO', 'https://zimbra.com/pagina28', 'Pagina 28'),
+(29, 'CLIC', 'https://zimbra.com/pagina29', 'Pagina 29'),
+(30, 'OTRO', 'https://zimbra.com/pagina30', 'Pagina 30');
+ 
+-- 9. productos (30)
+INSERT INTO productos(nombre, descripcion, precio_lista, moneda, activo) VALUES
+('Producto Zimbra 1', 'Version comercial numero 1', 100.00, 'COP', 1),
+('Producto Zimbra 2', 'Version comercial numero 2', 150.00, 'COP', 1),
+('Producto Zimbra 3', 'Version comercial numero 3', 200.00, 'COP', 1),
+('Producto Zimbra 4', 'Version comercial numero 4', 250.00, 'COP', 1),
+('Producto Zimbra 5', 'Version comercial numero 5', 300.00, 'COP', 1),
+('Producto Zimbra 6', 'Version comercial numero 6', 350.00, 'COP', 1),
+('Producto Zimbra 7', 'Version comercial numero 7', 400.00, 'COP', 1),
+('Producto Zimbra 8', 'Version comercial numero 8', 450.00, 'COP', 1),
+('Producto Zimbra 9', 'Version comercial numero 9', 500.00, 'COP', 1),
+('Producto Zimbra 10', 'Version comercial numero 10', 550.00, 'COP', 1),
+('Producto Zimbra 11', 'Version comercial numero 11', 600.00, 'COP', 1),
+('Producto Zimbra 12', 'Version comercial numero 12', 650.00, 'COP', 1),
+('Producto Zimbra 13', 'Version comercial numero 13', 700.00, 'COP', 1),
+('Producto Zimbra 14', 'Version comercial numero 14', 750.00, 'COP', 1),
+('Producto Zimbra 15', 'Version comercial numero 15', 800.00, 'COP', 1),
+('Producto Zimbra 16', 'Version comercial numero 16', 850.00, 'COP', 1),
+('Producto Zimbra 17', 'Version comercial numero 17', 900.00, 'COP', 1),
+('Producto Zimbra 18', 'Version comercial numero 18', 950.00, 'COP', 1),
+('Producto Zimbra 19', 'Version comercial numero 19', 1000.00, 'COP', 1),
+('Producto Zimbra 20', 'Version comercial numero 20', 1050.00, 'COP', 1),
+('Producto Zimbra 21', 'Version comercial numero 21', 1100.00, 'COP', 1),
+('Producto Zimbra 22', 'Version comercial numero 22', 1150.00, 'COP', 1),
+('Producto Zimbra 23', 'Version comercial numero 23', 1200.00, 'COP', 1),
+('Producto Zimbra 24', 'Version comercial numero 24', 1250.00, 'COP', 1),
+('Producto Zimbra 25', 'Version comercial numero 25', 1300.00, 'COP', 1),
+('Producto Zimbra 26', 'Version comercial numero 26', 1350.00, 'COP', 1),
+('Producto Zimbra 27', 'Version comercial numero 27', 1400.00, 'COP', 1),
+('Producto Zimbra 28', 'Version comercial numero 28', 1450.00, 'COP', 1),
+('Producto Zimbra 29', 'Version comercial numero 29', 1500.00, 'COP', 1),
+('Producto Zimbra 30', 'Version comercial numero 30', 1550.00, 'COP', 1);
+ 
+-- 10. pruebas_producto (30)
+-- Fechas relativas a NOW() para que los estados sigan siendo coherentes al importar.
+INSERT INTO pruebas_producto(id_contacto, id_producto, id_prospecto, fecha_inicio, fecha_fin, estado) VALUES
+(1, 1, 1, DATE_SUB(NOW(), INTERVAL 1 DAY), DATE_ADD(NOW(), INTERVAL 29 DAY), 'ACTIVA'),
+(2, 2, 2, DATE_SUB(NOW(), INTERVAL 35 DAY), DATE_SUB(NOW(), INTERVAL 5 DAY), 'VENCIDA'),
+(3, 3, 3, DATE_SUB(NOW(), INTERVAL 40 DAY), DATE_SUB(NOW(), INTERVAL 10 DAY), 'FINALIZADA'),
+(4, 4, 4, DATE_SUB(NOW(), INTERVAL 40 DAY), DATE_SUB(NOW(), INTERVAL 10 DAY), 'CONVERTIDO'),
+(5, 5, 5, DATE_SUB(NOW(), INTERVAL 40 DAY), DATE_SUB(NOW(), INTERVAL 10 DAY), 'CANCELADA'),
+(6, 6, 6, DATE_SUB(NOW(), INTERVAL 1 DAY), DATE_ADD(NOW(), INTERVAL 29 DAY), 'ACTIVA'),
+(7, 7, 7, DATE_SUB(NOW(), INTERVAL 35 DAY), DATE_SUB(NOW(), INTERVAL 5 DAY), 'VENCIDA'),
+(8, 8, 8, DATE_SUB(NOW(), INTERVAL 40 DAY), DATE_SUB(NOW(), INTERVAL 10 DAY), 'FINALIZADA'),
+(9, 9, 9, DATE_SUB(NOW(), INTERVAL 40 DAY), DATE_SUB(NOW(), INTERVAL 10 DAY), 'CONVERTIDO'),
+(10, 10, 10, DATE_SUB(NOW(), INTERVAL 40 DAY), DATE_SUB(NOW(), INTERVAL 10 DAY), 'CANCELADA'),
+(11, 11, 11, DATE_SUB(NOW(), INTERVAL 1 DAY), DATE_ADD(NOW(), INTERVAL 29 DAY), 'ACTIVA'),
+(12, 12, 12, DATE_SUB(NOW(), INTERVAL 35 DAY), DATE_SUB(NOW(), INTERVAL 5 DAY), 'VENCIDA'),
+(13, 13, 13, DATE_SUB(NOW(), INTERVAL 40 DAY), DATE_SUB(NOW(), INTERVAL 10 DAY), 'FINALIZADA'),
+(14, 14, 14, DATE_SUB(NOW(), INTERVAL 40 DAY), DATE_SUB(NOW(), INTERVAL 10 DAY), 'CONVERTIDO'),
+(15, 15, 15, DATE_SUB(NOW(), INTERVAL 40 DAY), DATE_SUB(NOW(), INTERVAL 10 DAY), 'CANCELADA'),
+(16, 16, 16, DATE_SUB(NOW(), INTERVAL 1 DAY), DATE_ADD(NOW(), INTERVAL 29 DAY), 'ACTIVA'),
+(17, 17, 17, DATE_SUB(NOW(), INTERVAL 35 DAY), DATE_SUB(NOW(), INTERVAL 5 DAY), 'VENCIDA'),
+(18, 18, 18, DATE_SUB(NOW(), INTERVAL 40 DAY), DATE_SUB(NOW(), INTERVAL 10 DAY), 'FINALIZADA'),
+(19, 19, 19, DATE_SUB(NOW(), INTERVAL 40 DAY), DATE_SUB(NOW(), INTERVAL 10 DAY), 'CONVERTIDO'),
+(20, 20, 20, DATE_SUB(NOW(), INTERVAL 40 DAY), DATE_SUB(NOW(), INTERVAL 10 DAY), 'CANCELADA'),
+(21, 21, 21, DATE_SUB(NOW(), INTERVAL 1 DAY), DATE_ADD(NOW(), INTERVAL 29 DAY), 'ACTIVA'),
+(22, 22, 22, DATE_SUB(NOW(), INTERVAL 35 DAY), DATE_SUB(NOW(), INTERVAL 5 DAY), 'VENCIDA'),
+(23, 23, 23, DATE_SUB(NOW(), INTERVAL 40 DAY), DATE_SUB(NOW(), INTERVAL 10 DAY), 'FINALIZADA'),
+(24, 24, 24, DATE_SUB(NOW(), INTERVAL 40 DAY), DATE_SUB(NOW(), INTERVAL 10 DAY), 'CONVERTIDO'),
+(25, 25, 25, DATE_SUB(NOW(), INTERVAL 40 DAY), DATE_SUB(NOW(), INTERVAL 10 DAY), 'CANCELADA'),
+(26, 26, 26, DATE_SUB(NOW(), INTERVAL 1 DAY), DATE_ADD(NOW(), INTERVAL 29 DAY), 'ACTIVA'),
+(27, 27, 27, DATE_SUB(NOW(), INTERVAL 35 DAY), DATE_SUB(NOW(), INTERVAL 5 DAY), 'VENCIDA'),
+(28, 28, 28, DATE_SUB(NOW(), INTERVAL 40 DAY), DATE_SUB(NOW(), INTERVAL 10 DAY), 'FINALIZADA'),
+(29, 29, 29, DATE_SUB(NOW(), INTERVAL 40 DAY), DATE_SUB(NOW(), INTERVAL 10 DAY), 'CONVERTIDO'),
+(30, 30, 30, DATE_SUB(NOW(), INTERVAL 40 DAY), DATE_SUB(NOW(), INTERVAL 10 DAY), 'CANCELADA');
+ 
+-- 11. oportunidades (30)
+INSERT INTO oportunidades(id_prospecto, id_responsable, nombre, etapa, estado, monto_estimado, moneda, fecha_cierre_prevista) VALUES
+(1, 1, 'Oportunidad 1', 'DESCUBRIMIENTO', 'ABIERTA', 5000.00, 'COP', '2026-12-01'),
+(2, 2, 'Oportunidad 2', 'CALIFICACION', 'GANADA', 6000.00, 'COP', '2026-12-02'),
+(3, 3, 'Oportunidad 3', 'PROPUESTA', 'PERDIDA', 7000.00, 'COP', '2026-12-03'),
+(4, 4, 'Oportunidad 4', 'NEGOCIACION', 'ABIERTA', 8000.00, 'COP', '2026-12-04'),
+(5, 5, 'Oportunidad 5', 'CIERRE', 'GANADA', 9000.00, 'COP', '2026-12-05'),
+(6, 6, 'Oportunidad 6', 'DESCUBRIMIENTO', 'PERDIDA', 10000.00, 'COP', '2026-12-06'),
+(7, 7, 'Oportunidad 7', 'CALIFICACION', 'ABIERTA', 11000.00, 'COP', '2026-12-07'),
+(8, 8, 'Oportunidad 8', 'PROPUESTA', 'GANADA', 12000.00, 'COP', '2026-12-08'),
+(9, 9, 'Oportunidad 9', 'NEGOCIACION', 'PERDIDA', 13000.00, 'COP', '2026-12-09'),
+(10, 10, 'Oportunidad 10', 'CIERRE', 'ABIERTA', 14000.00, 'COP', '2026-12-10'),
+(11, 11, 'Oportunidad 11', 'DESCUBRIMIENTO', 'GANADA', 15000.00, 'COP', '2026-12-11'),
+(12, 12, 'Oportunidad 12', 'CALIFICACION', 'PERDIDA', 16000.00, 'COP', '2026-12-12'),
+(13, 13, 'Oportunidad 13', 'PROPUESTA', 'ABIERTA', 17000.00, 'COP', '2026-12-13'),
+(14, 14, 'Oportunidad 14', 'NEGOCIACION', 'GANADA', 18000.00, 'COP', '2026-12-14'),
+(15, 15, 'Oportunidad 15', 'CIERRE', 'PERDIDA', 19000.00, 'COP', '2026-12-15'),
+(16, 16, 'Oportunidad 16', 'DESCUBRIMIENTO', 'ABIERTA', 20000.00, 'COP', '2026-12-16'),
+(17, 17, 'Oportunidad 17', 'CALIFICACION', 'GANADA', 21000.00, 'COP', '2026-12-17'),
+(18, 18, 'Oportunidad 18', 'PROPUESTA', 'PERDIDA', 22000.00, 'COP', '2026-12-18'),
+(19, 19, 'Oportunidad 19', 'NEGOCIACION', 'ABIERTA', 23000.00, 'COP', '2026-12-19'),
+(20, 20, 'Oportunidad 20', 'CIERRE', 'GANADA', 24000.00, 'COP', '2026-12-20'),
+(21, 21, 'Oportunidad 21', 'DESCUBRIMIENTO', 'PERDIDA', 25000.00, 'COP', '2026-12-21'),
+(22, 22, 'Oportunidad 22', 'CALIFICACION', 'ABIERTA', 26000.00, 'COP', '2026-12-22'),
+(23, 23, 'Oportunidad 23', 'PROPUESTA', 'GANADA', 27000.00, 'COP', '2026-12-23'),
+(24, 24, 'Oportunidad 24', 'NEGOCIACION', 'PERDIDA', 28000.00, 'COP', '2026-12-24'),
+(25, 25, 'Oportunidad 25', 'CIERRE', 'ABIERTA', 29000.00, 'COP', '2026-12-25'),
+(26, 26, 'Oportunidad 26', 'DESCUBRIMIENTO', 'GANADA', 30000.00, 'COP', '2026-12-26'),
+(27, 27, 'Oportunidad 27', 'CALIFICACION', 'PERDIDA', 31000.00, 'COP', '2026-12-27'),
+(28, 28, 'Oportunidad 28', 'PROPUESTA', 'ABIERTA', 32000.00, 'COP', '2026-12-28'),
+(29, 29, 'Oportunidad 29', 'NEGOCIACION', 'GANADA', 33000.00, 'COP', '2026-12-01'),
+(30, 30, 'Oportunidad 30', 'CIERRE', 'PERDIDA', 34000.00, 'COP', '2026-12-02');
+ 
+-- 12. interacciones (30)
+INSERT INTO interacciones(id_contacto, id_prospecto, id_oportunidad, id_usuario, tipo, direccion, resultado, estado, fecha_realizada) VALUES
+(1, 1, 1, 1, 'LLAMADA', 'SALIENTE', 'CONTACTADO', 'COMPLETADA', '2026-10-01 10:00:00'),
+(2, 2, 2, 2, 'CORREO', 'SALIENTE', 'SIN_RESPUESTA', 'COMPLETADA', '2026-10-02 10:00:00'),
+(3, 3, 3, 3, 'REUNION', 'SALIENTE', 'NO_INTERESADO', 'COMPLETADA', '2026-10-03 10:00:00'),
+(4, 4, 4, 4, 'WHATSAPP', 'SALIENTE', 'OTRO', 'COMPLETADA', '2026-10-04 10:00:00'),
+(5, 5, 5, 5, 'OTRO', 'SALIENTE', 'CONTACTADO', 'COMPLETADA', '2026-10-05 10:00:00'),
+(6, 6, 6, 6, 'LLAMADA', 'SALIENTE', 'CONTACTADO', 'COMPLETADA', '2026-10-06 10:00:00'),
+(7, 7, 7, 7, 'CORREO', 'SALIENTE', 'SIN_RESPUESTA', 'COMPLETADA', '2026-10-07 10:00:00'),
+(8, 8, 8, 8, 'REUNION', 'SALIENTE', 'NO_INTERESADO', 'COMPLETADA', '2026-10-08 10:00:00'),
+(9, 9, 9, 9, 'WHATSAPP', 'SALIENTE', 'OTRO', 'COMPLETADA', '2026-10-09 10:00:00'),
+(10, 10, 10, 10, 'OTRO', 'SALIENTE', 'CONTACTADO', 'COMPLETADA', '2026-10-10 10:00:00'),
+(11, 11, 11, 11, 'LLAMADA', 'SALIENTE', 'CONTACTADO', 'COMPLETADA', '2026-10-11 10:00:00'),
+(12, 12, 12, 12, 'CORREO', 'SALIENTE', 'SIN_RESPUESTA', 'COMPLETADA', '2026-10-12 10:00:00'),
+(13, 13, 13, 13, 'REUNION', 'SALIENTE', 'NO_INTERESADO', 'COMPLETADA', '2026-10-13 10:00:00'),
+(14, 14, 14, 14, 'WHATSAPP', 'SALIENTE', 'OTRO', 'COMPLETADA', '2026-10-14 10:00:00'),
+(15, 15, 15, 15, 'OTRO', 'SALIENTE', 'CONTACTADO', 'COMPLETADA', '2026-10-15 10:00:00'),
+(16, 16, 16, 16, 'LLAMADA', 'SALIENTE', 'CONTACTADO', 'COMPLETADA', '2026-10-16 10:00:00'),
+(17, 17, 17, 17, 'CORREO', 'SALIENTE', 'SIN_RESPUESTA', 'COMPLETADA', '2026-10-17 10:00:00'),
+(18, 18, 18, 18, 'REUNION', 'SALIENTE', 'NO_INTERESADO', 'COMPLETADA', '2026-10-18 10:00:00'),
+(19, 19, 19, 19, 'WHATSAPP', 'SALIENTE', 'OTRO', 'COMPLETADA', '2026-10-19 10:00:00'),
+(20, 20, 20, 20, 'OTRO', 'SALIENTE', 'CONTACTADO', 'COMPLETADA', '2026-10-20 10:00:00'),
+(21, 21, 21, 21, 'LLAMADA', 'SALIENTE', 'CONTACTADO', 'COMPLETADA', '2026-10-21 10:00:00'),
+(22, 22, 22, 22, 'CORREO', 'SALIENTE', 'SIN_RESPUESTA', 'COMPLETADA', '2026-10-22 10:00:00'),
+(23, 23, 23, 23, 'REUNION', 'SALIENTE', 'NO_INTERESADO', 'COMPLETADA', '2026-10-23 10:00:00'),
+(24, 24, 24, 24, 'WHATSAPP', 'SALIENTE', 'OTRO', 'COMPLETADA', '2026-10-24 10:00:00'),
+(25, 25, 25, 25, 'OTRO', 'SALIENTE', 'CONTACTADO', 'COMPLETADA', '2026-10-25 10:00:00'),
+(26, 26, 26, 26, 'LLAMADA', 'SALIENTE', 'CONTACTADO', 'COMPLETADA', '2026-10-26 10:00:00'),
+(27, 27, 27, 27, 'CORREO', 'SALIENTE', 'SIN_RESPUESTA', 'COMPLETADA', '2026-10-27 10:00:00'),
+(28, 28, 28, 28, 'REUNION', 'SALIENTE', 'NO_INTERESADO', 'COMPLETADA', '2026-10-28 10:00:00'),
+(29, 29, 29, 29, 'WHATSAPP', 'SALIENTE', 'OTRO', 'COMPLETADA', '2026-10-01 10:00:00'),
+(30, 30, 30, 30, 'OTRO', 'SALIENTE', 'CONTACTADO', 'COMPLETADA', '2026-10-02 10:00:00');
+ 
+-- 13. alertas (30)
+INSERT INTO alertas(id_usuario, id_prospecto, id_evento_web, id_interaccion, tipo_alerta, titulo, mensaje) VALUES
+(1, 1, 1, 1, 'VISITA_RELEVANTE', 'Alerta 1', 'Notificacion automatica numero 1'),
+(2, 2, 2, 2, 'DESCARGA_PRUEBA', 'Alerta 2', 'Notificacion automatica numero 2'),
+(3, 3, 3, 3, 'SEGUIMIENTO', 'Alerta 3', 'Notificacion automatica numero 3'),
+(4, 4, 4, 4, 'PRUEBA_POR_VENCER', 'Alerta 4', 'Notificacion automatica numero 4'),
+(5, 5, 5, 5, 'OTRA', 'Alerta 5', 'Notificacion automatica numero 5'),
+(6, 6, 6, 6, 'VISITA_RELEVANTE', 'Alerta 6', 'Notificacion automatica numero 6'),
+(7, 7, 7, 7, 'DESCARGA_PRUEBA', 'Alerta 7', 'Notificacion automatica numero 7'),
+(8, 8, 8, 8, 'SEGUIMIENTO', 'Alerta 8', 'Notificacion automatica numero 8'),
+(9, 9, 9, 9, 'PRUEBA_POR_VENCER', 'Alerta 9', 'Notificacion automatica numero 9'),
+(10, 10, 10, 10, 'OTRA', 'Alerta 10', 'Notificacion automatica numero 10'),
+(11, 11, 11, 11, 'VISITA_RELEVANTE', 'Alerta 11', 'Notificacion automatica numero 11'),
+(12, 12, 12, 12, 'DESCARGA_PRUEBA', 'Alerta 12', 'Notificacion automatica numero 12'),
+(13, 13, 13, 13, 'SEGUIMIENTO', 'Alerta 13', 'Notificacion automatica numero 13'),
+(14, 14, 14, 14, 'PRUEBA_POR_VENCER', 'Alerta 14', 'Notificacion automatica numero 14'),
+(15, 15, 15, 15, 'OTRA', 'Alerta 15', 'Notificacion automatica numero 15'),
+(16, 16, 16, 16, 'VISITA_RELEVANTE', 'Alerta 16', 'Notificacion automatica numero 16'),
+(17, 17, 17, 17, 'DESCARGA_PRUEBA', 'Alerta 17', 'Notificacion automatica numero 17'),
+(18, 18, 18, 18, 'SEGUIMIENTO', 'Alerta 18', 'Notificacion automatica numero 18'),
+(19, 19, 19, 19, 'PRUEBA_POR_VENCER', 'Alerta 19', 'Notificacion automatica numero 19'),
+(20, 20, 20, 20, 'OTRA', 'Alerta 20', 'Notificacion automatica numero 20'),
+(21, 21, 21, 21, 'VISITA_RELEVANTE', 'Alerta 21', 'Notificacion automatica numero 21'),
+(22, 22, 22, 22, 'DESCARGA_PRUEBA', 'Alerta 22', 'Notificacion automatica numero 22'),
+(23, 23, 23, 23, 'SEGUIMIENTO', 'Alerta 23', 'Notificacion automatica numero 23'),
+(24, 24, 24, 24, 'PRUEBA_POR_VENCER', 'Alerta 24', 'Notificacion automatica numero 24'),
+(25, 25, 25, 25, 'OTRA', 'Alerta 25', 'Notificacion automatica numero 25'),
+(26, 26, 26, 26, 'VISITA_RELEVANTE', 'Alerta 26', 'Notificacion automatica numero 26'),
+(27, 27, 27, 27, 'DESCARGA_PRUEBA', 'Alerta 27', 'Notificacion automatica numero 27'),
+(28, 28, 28, 28, 'SEGUIMIENTO', 'Alerta 28', 'Notificacion automatica numero 28'),
+(29, 29, 29, 29, 'PRUEBA_POR_VENCER', 'Alerta 29', 'Notificacion automatica numero 29'),
+(30, 30, 30, 30, 'OTRA', 'Alerta 30', 'Notificacion automatica numero 30');
+ 
+-- 14. campanas (30) — estado ENVIADA para permitir envios (trigger T6)
+INSERT INTO campanas(id_creador, nombre, asunto_correo, contenido, estado, enviada_en) VALUES
+(1, 'Campana 1', 'Asunto campana 1', '<p>Contenido campana 1</p>', 'ENVIADA', '2026-10-01 08:00:00'),
+(2, 'Campana 2', 'Asunto campana 2', '<p>Contenido campana 2</p>', 'ENVIADA', '2026-10-02 08:00:00'),
+(3, 'Campana 3', 'Asunto campana 3', '<p>Contenido campana 3</p>', 'ENVIADA', '2026-10-03 08:00:00'),
+(4, 'Campana 4', 'Asunto campana 4', '<p>Contenido campana 4</p>', 'ENVIADA', '2026-10-04 08:00:00'),
+(5, 'Campana 5', 'Asunto campana 5', '<p>Contenido campana 5</p>', 'ENVIADA', '2026-10-05 08:00:00'),
+(6, 'Campana 6', 'Asunto campana 6', '<p>Contenido campana 6</p>', 'ENVIADA', '2026-10-06 08:00:00'),
+(7, 'Campana 7', 'Asunto campana 7', '<p>Contenido campana 7</p>', 'ENVIADA', '2026-10-07 08:00:00'),
+(8, 'Campana 8', 'Asunto campana 8', '<p>Contenido campana 8</p>', 'ENVIADA', '2026-10-08 08:00:00'),
+(9, 'Campana 9', 'Asunto campana 9', '<p>Contenido campana 9</p>', 'ENVIADA', '2026-10-09 08:00:00'),
+(10, 'Campana 10', 'Asunto campana 10', '<p>Contenido campana 10</p>', 'ENVIADA', '2026-10-10 08:00:00'),
+(11, 'Campana 11', 'Asunto campana 11', '<p>Contenido campana 11</p>', 'ENVIADA', '2026-10-11 08:00:00'),
+(12, 'Campana 12', 'Asunto campana 12', '<p>Contenido campana 12</p>', 'ENVIADA', '2026-10-12 08:00:00'),
+(13, 'Campana 13', 'Asunto campana 13', '<p>Contenido campana 13</p>', 'ENVIADA', '2026-10-13 08:00:00'),
+(14, 'Campana 14', 'Asunto campana 14', '<p>Contenido campana 14</p>', 'ENVIADA', '2026-10-14 08:00:00'),
+(15, 'Campana 15', 'Asunto campana 15', '<p>Contenido campana 15</p>', 'ENVIADA', '2026-10-15 08:00:00'),
+(16, 'Campana 16', 'Asunto campana 16', '<p>Contenido campana 16</p>', 'ENVIADA', '2026-10-16 08:00:00'),
+(17, 'Campana 17', 'Asunto campana 17', '<p>Contenido campana 17</p>', 'ENVIADA', '2026-10-17 08:00:00'),
+(18, 'Campana 18', 'Asunto campana 18', '<p>Contenido campana 18</p>', 'ENVIADA', '2026-10-18 08:00:00'),
+(19, 'Campana 19', 'Asunto campana 19', '<p>Contenido campana 19</p>', 'ENVIADA', '2026-10-19 08:00:00'),
+(20, 'Campana 20', 'Asunto campana 20', '<p>Contenido campana 20</p>', 'ENVIADA', '2026-10-20 08:00:00'),
+(21, 'Campana 21', 'Asunto campana 21', '<p>Contenido campana 21</p>', 'ENVIADA', '2026-10-21 08:00:00'),
+(22, 'Campana 22', 'Asunto campana 22', '<p>Contenido campana 22</p>', 'ENVIADA', '2026-10-22 08:00:00'),
+(23, 'Campana 23', 'Asunto campana 23', '<p>Contenido campana 23</p>', 'ENVIADA', '2026-10-23 08:00:00'),
+(24, 'Campana 24', 'Asunto campana 24', '<p>Contenido campana 24</p>', 'ENVIADA', '2026-10-24 08:00:00'),
+(25, 'Campana 25', 'Asunto campana 25', '<p>Contenido campana 25</p>', 'ENVIADA', '2026-10-25 08:00:00'),
+(26, 'Campana 26', 'Asunto campana 26', '<p>Contenido campana 26</p>', 'ENVIADA', '2026-10-26 08:00:00'),
+(27, 'Campana 27', 'Asunto campana 27', '<p>Contenido campana 27</p>', 'ENVIADA', '2026-10-27 08:00:00'),
+(28, 'Campana 28', 'Asunto campana 28', '<p>Contenido campana 28</p>', 'ENVIADA', '2026-10-28 08:00:00'),
+(29, 'Campana 29', 'Asunto campana 29', '<p>Contenido campana 29</p>', 'ENVIADA', '2026-10-01 08:00:00'),
+(30, 'Campana 30', 'Asunto campana 30', '<p>Contenido campana 30</p>', 'ENVIADA', '2026-10-02 08:00:00');
+ 
+-- 15. envios_campana (30) — dispara T6 (valida consentimiento y estado de campana)
+INSERT INTO envios_campana(id_campana, id_contacto, estado, enviado_en, abierto_en) VALUES
+(1, 1, 'PENDIENTE', '2026-10-01 08:30:00', NULL),
+(2, 2, 'ENVIADO', '2026-10-02 08:30:00', NULL),
+(3, 3, 'ENTREGADO', '2026-10-03 08:30:00', NULL),
+(4, 4, 'ABIERTO', '2026-10-04 08:30:00', '2026-10-4 09:00:00'),
+(5, 5, 'CLIC', '2026-10-05 08:30:00', '2026-10-5 09:00:00'),
+(6, 6, 'REBOTADO', '2026-10-06 08:30:00', NULL),
+(7, 7, 'PENDIENTE', '2026-10-07 08:30:00', NULL),
+(8, 8, 'ENVIADO', '2026-10-08 08:30:00', NULL),
+(9, 9, 'ENTREGADO', '2026-10-09 08:30:00', NULL),
+(10, 10, 'ABIERTO', '2026-10-10 08:30:00', '2026-10-10 09:00:00'),
+(11, 11, 'CLIC', '2026-10-11 08:30:00', '2026-10-11 09:00:00'),
+(12, 12, 'REBOTADO', '2026-10-12 08:30:00', NULL),
+(13, 13, 'PENDIENTE', '2026-10-13 08:30:00', NULL),
+(14, 14, 'ENVIADO', '2026-10-14 08:30:00', NULL),
+(15, 15, 'ENTREGADO', '2026-10-15 08:30:00', NULL),
+(16, 16, 'ABIERTO', '2026-10-16 08:30:00', '2026-10-16 09:00:00'),
+(17, 17, 'CLIC', '2026-10-17 08:30:00', '2026-10-17 09:00:00'),
+(18, 18, 'REBOTADO', '2026-10-18 08:30:00', NULL),
+(19, 19, 'PENDIENTE', '2026-10-19 08:30:00', NULL),
+(20, 20, 'ENVIADO', '2026-10-20 08:30:00', NULL),
+(21, 21, 'ENTREGADO', '2026-10-21 08:30:00', NULL),
+(22, 22, 'ABIERTO', '2026-10-22 08:30:00', '2026-10-22 09:00:00'),
+(23, 23, 'CLIC', '2026-10-23 08:30:00', '2026-10-23 09:00:00'),
+(24, 24, 'REBOTADO', '2026-10-24 08:30:00', NULL),
+(25, 25, 'PENDIENTE', '2026-10-25 08:30:00', NULL),
+(26, 26, 'ENVIADO', '2026-10-26 08:30:00', NULL),
+(27, 27, 'ENTREGADO', '2026-10-27 08:30:00', NULL),
+(28, 28, 'ABIERTO', '2026-10-28 08:30:00', '2026-10-28 09:00:00'),
+(29, 29, 'CLIC', '2026-10-01 08:30:00', '2026-10-1 09:00:00'),
+(30, 30, 'REBOTADO', '2026-10-02 08:30:00', NULL);
+ 
+USE zimbra_crm;
+ 
+-- ------------------------------------------------------------
+-- Escenario 1: crear un usuario y cambiarle el rol
+-- ------------------------------------------------------------
+START TRANSACTION;
+ 
+INSERT INTO usuarios(id_rol, nombre, apellido, correo, nombre_usuario, password_hash, telefono)
+VALUES (1, 'Usuario31', 'Apellido31', 'usuario31@zimbra.com', 'user31',
+        'pbkdf2_sha256$260000$WmltYnJhQ1JNLURlbW8tU2FsdC0yMDI2$zXniXXH_3YNR681NU945BL1WDUPh7bDRpL5lwRPe9gw', '3000000031');
+ 
+SAVEPOINT usuario_creado;
+ 
+UPDATE usuarios SET id_rol = 2 WHERE nombre_usuario = 'user31';
+ 
+-- Se asignó el rol equivocado, se vuelve al usuario recién creado
+ROLLBACK TO SAVEPOINT usuario_creado;
+ 
+COMMIT;
+ 
+-- user31 queda con rol 1 y en la bitácora solo aparece CREACION_USUARIO
+SELECT id_usuario, nombre_usuario, id_rol FROM usuarios WHERE nombre_usuario = 'user31';
+SELECT tipo_evento, detalle FROM bitacora_uso
+WHERE id_usuario = (SELECT id_usuario FROM usuarios WHERE nombre_usuario = 'user31');
+ 
+ 
+-- ------------------------------------------------------------
+-- Escenario 2: empresa, contacto, prospecto y oportunidad
+-- ------------------------------------------------------------
+START TRANSACTION;
+ 
+INSERT INTO empresas(nombre_legal, nombre_comercial, nit, sector, ciudad, pais)
+VALUES ('Empresa 31 SAS', 'Comercial 31', '900000031-7', 'Tecnologia', 'Bogota', 'CO');
+SET @id_empresa = LAST_INSERT_ID();
+ 
+INSERT INTO contactos(id_empresa, nombres, apellidos, correo, telefono, cargo, consentimiento_email, fecha_consentimiento_email, preferencia_contacto)
+VALUES (@id_empresa, 'Contacto', '31', 'contacto31@empresa.com', '601000031', 'Gerente', 'OTORGADO', NOW(), 'EMAIL');
+SET @id_contacto = LAST_INSERT_ID();
+ 
+INSERT INTO prospectos(id_contacto, id_fuente, id_responsable, estado, prioridad, puntuacion)
+VALUES (@id_contacto, 1, 1, 'NUEVO', 'MEDIA', 0);
+SET @id_prospecto = LAST_INSERT_ID();
+ 
+SAVEPOINT prospecto_creado;
+ 
+INSERT INTO oportunidades(id_prospecto, id_responsable, nombre, etapa, estado, monto_estimado, moneda, fecha_cierre_prevista)
+VALUES (@id_prospecto, 1, 'Oportunidad 31', 'DESCUBRIMIENTO', 'ABIERTA', 35000.00, 'COP', '2026-12-30');
+SET @id_oportunidad = LAST_INSERT_ID();
+ 
+-- Como el resultado es INTERESADO, el trigger T6 crea una alerta de seguimiento
+INSERT INTO interacciones(id_contacto, id_prospecto, id_oportunidad, id_usuario, tipo, direccion, resultado, estado, fecha_realizada)
+VALUES (@id_contacto, @id_prospecto, @id_oportunidad, 1, 'LLAMADA', 'SALIENTE', 'INTERESADO', 'COMPLETADA', NOW());
+ 
+-- El cliente no sigue con la propuesta: se quita la oportunidad, la llamada y la alerta
+ROLLBACK TO SAVEPOINT prospecto_creado;
+ 
+COMMIT;
+ 
+-- Quedan la empresa, el contacto y el prospecto; las otras tres consultas dan 0
+SELECT id_prospecto, id_contacto, estado FROM prospectos WHERE id_prospecto = @id_prospecto;
+SELECT COUNT(*) AS oportunidades FROM oportunidades WHERE id_prospecto = @id_prospecto;
+SELECT COUNT(*) AS interacciones FROM interacciones WHERE id_prospecto = @id_prospecto;
+SELECT COUNT(*) AS alertas FROM alertas WHERE id_prospecto = @id_prospecto;
+ 
+ 
+-- ------------------------------------------------------------
+-- Escenario 3: campaña de correo con sus destinatarios
+-- (el trigger T5 solo deja agregar envíos si la campaña está programada)
+-- ------------------------------------------------------------
+START TRANSACTION;
+ 
+INSERT INTO campanas(id_creador, nombre, asunto_correo, contenido, estado)
+VALUES (1, 'Campana 31', 'Asunto campana 31', '<p>Contenido campana 31</p>', 'BORRADOR');
+SET @id_campana = LAST_INSERT_ID();
+ 
+UPDATE campanas
+SET estado = 'PROGRAMADA', programada_para = DATE_ADD(NOW(), INTERVAL 1 DAY)
+WHERE id_campana = @id_campana;
+ 
+SAVEPOINT campana_programada;
+ 
+-- Se cargó la lista de destinatarios equivocada
+INSERT INTO envios_campana(id_campana, id_contacto, estado)
+VALUES (@id_campana, 1, 'PENDIENTE'), (@id_campana, 2, 'PENDIENTE'), (@id_campana, 3, 'PENDIENTE');
+ 
+ROLLBACK TO SAVEPOINT campana_programada;
+ 
+-- Se cargan los destinatarios correctos (el savepoint sigue activo después del rollback)
+INSERT INTO envios_campana(id_campana, id_contacto, estado)
+VALUES (@id_campana, 4, 'PENDIENTE'), (@id_campana, 5, 'PENDIENTE');
+ 
+COMMIT;
+ 
+-- La campaña queda PROGRAMADA y solo con los contactos 4 y 5
+SELECT id_campana, nombre, estado FROM campanas WHERE id_campana = @id_campana;
+SELECT id_envio, id_contacto, estado FROM envios_campana WHERE id_campana = @id_campana;
+```[cite: 3]
